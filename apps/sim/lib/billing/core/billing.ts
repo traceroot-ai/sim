@@ -12,6 +12,7 @@ import {
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { getUserUsageData } from '@/lib/billing/core/usage'
 import { requireStripeClient } from '@/lib/billing/stripe-client'
+import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
 import { member, organization, subscription, user } from '@/db/schema'
@@ -69,22 +70,22 @@ export function getPlanPricing(
     case 'team':
       return { basePrice: DEFAULT_TEAM_TIER_COST_LIMIT, minimum: DEFAULT_TEAM_TIER_COST_LIMIT }
     case 'enterprise':
-      // Get per-seat pricing from metadata
+      // Enterprise uses per-seat pricing like Team plans
+      // Custom per-seat price can be set in metadata
       if (subscription?.metadata) {
-        const metadata =
+        const metadata: EnterpriseSubscriptionMetadata =
           typeof subscription.metadata === 'string'
             ? JSON.parse(subscription.metadata)
             : subscription.metadata
 
-        // Validate perSeatAllowance is a positive number
-        const perSeatAllowance = metadata.perSeatAllowance
-        const perSeatPrice =
-          typeof perSeatAllowance === 'number' && perSeatAllowance > 0
-            ? perSeatAllowance
-            : DEFAULT_ENTERPRISE_TIER_COST_LIMIT
-
-        return { basePrice: perSeatPrice, minimum: perSeatPrice }
+        const perSeatPrice = metadata.perSeatPrice
+          ? Number.parseFloat(String(metadata.perSeatPrice))
+          : undefined
+        if (perSeatPrice && perSeatPrice > 0 && !Number.isNaN(perSeatPrice)) {
+          return { basePrice: perSeatPrice, minimum: perSeatPrice }
+        }
       }
+      // Default enterprise per-seat pricing
       return {
         basePrice: DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
         minimum: DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
@@ -112,26 +113,14 @@ async function getStripeCustomerId(referenceId: string): Promise<string | null> 
 
     // Check if it's an organization
     const orgRecord = await db
-      .select({ metadata: organization.metadata })
+      .select({ id: organization.id })
       .from(organization)
       .where(eq(organization.id, referenceId))
       .limit(1)
 
     if (orgRecord.length > 0) {
-      // First, check if organization has its own Stripe customer (legacy support)
-      if (orgRecord[0].metadata) {
-        const metadata =
-          typeof orgRecord[0].metadata === 'string'
-            ? JSON.parse(orgRecord[0].metadata)
-            : orgRecord[0].metadata
-
-        if (metadata?.stripeCustomerId) {
-          return metadata.stripeCustomerId
-        }
-      }
-
-      // If organization has no Stripe customer, use the owner's customer
-      // This is our new pattern: subscriptions stay with user, referenceId = orgId
+      // Organizations don't have their own Stripe customers
+      // Pattern: subscriptions stay with user, referenceId = orgId
       const ownerRecord = await db
         .select({
           stripeCustomerId: user.stripeCustomerId,

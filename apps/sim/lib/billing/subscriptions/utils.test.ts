@@ -49,24 +49,24 @@ describe('Subscription Utilities', () => {
       expect(getSubscriptionAllowance({ plan: 'team', status: 'active', seats: 3 })).toBe(3 * 40)
     })
 
-    it.concurrent('returns enterprise limit using perSeatAllowance metadata', () => {
+    it.concurrent('returns enterprise limit using perSeatPrice metadata', () => {
       const sub = {
         plan: 'enterprise',
         status: 'active',
         seats: 10,
-        metadata: { perSeatAllowance: '150' },
+        metadata: { perSeatPrice: 150 },
       }
       expect(getSubscriptionAllowance(sub)).toBe(10 * 150)
     })
 
-    it.concurrent('returns enterprise limit using totalAllowance metadata', () => {
+    it.concurrent('returns enterprise limit using perSeatPrice as string', () => {
       const sub = {
         plan: 'enterprise',
         status: 'active',
         seats: 8,
-        metadata: { totalAllowance: '5000' },
+        metadata: { perSeatPrice: '250' },
       }
-      expect(getSubscriptionAllowance(sub)).toBe(5000)
+      expect(getSubscriptionAllowance(sub)).toBe(8 * 250)
     })
 
     it.concurrent('falls back to default enterprise tier when metadata missing', () => {

@@ -3,10 +3,15 @@
  * Centralized type definitions for the billing system
  */
 
-export interface SubscriptionFeatures {
-  sharingEnabled: boolean
-  multiplayerEnabled: boolean
-  workspaceCollaborationEnabled: boolean
+export interface EnterpriseSubscriptionMetadata {
+  // Custom per-seat pricing (defaults to DEFAULT_ENTERPRISE_TIER_COST_LIMIT)
+  perSeatPrice?: number
+
+  // Maximum allowed seats (defaults to subscription.seats)
+  maxSeats?: number
+
+  // Whether seats are fixed and cannot be changed
+  fixedSeats?: boolean
 }
 
 export interface UsageData {
@@ -43,7 +48,6 @@ export interface UserSubscriptionState {
   isEnterprise: boolean
   isFree: boolean
   highestPrioritySubscription: any | null
-  features: SubscriptionFeatures
   hasExceededLimit: boolean
   planName: string
 }
@@ -53,9 +57,6 @@ export interface SubscriptionPlan {
   priceId: string
   limits: {
     cost: number
-    sharingEnabled: number
-    multiplayerEnabled: number
-    workspaceCollaborationEnabled: number
   }
 }
 
@@ -136,7 +137,6 @@ export interface SubscriptionAPIResponse {
   status: string | null
   seats: number | null
   metadata: any | null
-  features: SubscriptionFeatures
   usage: UsageData
 }
 
@@ -189,12 +189,10 @@ export interface UseSubscriptionStateReturn {
     seats?: number
     metadata?: any
   }
-  features: SubscriptionFeatures
   usage: UsageData
   isLoading: boolean
   error: Error | null
   refetch: () => Promise<any>
-  hasFeature: (feature: keyof SubscriptionFeatures) => boolean
   isAtLeastPro: () => boolean
   isAtLeastTeam: () => boolean
   canUpgrade: () => boolean

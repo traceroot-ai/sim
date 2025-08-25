@@ -1,5 +1,4 @@
 import { and, eq, inArray } from 'drizzle-orm'
-import { client } from '@/lib/auth-client'
 import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
 import {
   checkEnterprisePlan,
@@ -227,36 +226,6 @@ export async function getUserSubscriptionState(userId: string): Promise<UserSubs
     else if (isTeam) planName = 'team'
     else if (isPro) planName = 'pro'
 
-    // Check features based on subscription (avoid redundant better-auth calls)
-    let sharingEnabled = false
-    let multiplayerEnabled = false
-    let workspaceCollaborationEnabled = false
-
-    if (!isProd || subscription) {
-      if (!isProd) {
-        // Development mode - enable all features
-        sharingEnabled = true
-        multiplayerEnabled = true
-        workspaceCollaborationEnabled = true
-      } else {
-        // Production mode - check subscription features
-        try {
-          const { data: subscriptions } = await client.subscription.list({
-            query: { referenceId: subscription.referenceId },
-          })
-          const activeSubscription = subscriptions?.find((sub) => sub.status === 'active')
-
-          sharingEnabled = !!activeSubscription?.limits?.sharingEnabled
-          multiplayerEnabled = !!activeSubscription?.limits?.multiplayerEnabled
-          workspaceCollaborationEnabled =
-            !!activeSubscription?.limits?.workspaceCollaborationEnabled
-        } catch (error) {
-          logger.error('Error checking subscription features', { error, userId })
-          // Default to false on error
-        }
-      }
-    }
-
     // Check cost limit using already-fetched user stats
     let hasExceededLimit = false
     if (isProd && statsRecords.length > 0) {
@@ -277,11 +246,6 @@ export async function getUserSubscriptionState(userId: string): Promise<UserSubs
       isEnterprise,
       isFree,
       highestPrioritySubscription: subscription,
-      features: {
-        sharingEnabled,
-        multiplayerEnabled,
-        workspaceCollaborationEnabled,
-      },
       hasExceededLimit,
       planName,
     }
@@ -295,11 +259,6 @@ export async function getUserSubscriptionState(userId: string): Promise<UserSubs
       isEnterprise: false,
       isFree: true,
       highestPrioritySubscription: null,
-      features: {
-        sharingEnabled: false,
-        multiplayerEnabled: false,
-        workspaceCollaborationEnabled: false,
-      },
       hasExceededLimit: false,
       planName: 'free',
     }

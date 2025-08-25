@@ -491,7 +491,7 @@ export const subscription = pgTable(
     ),
     enterpriseMetadataCheck: check(
       'check_enterprise_metadata',
-      sql`plan != 'enterprise' OR (metadata IS NOT NULL AND (metadata->>'perSeatAllowance' IS NOT NULL OR metadata->>'totalAllowance' IS NOT NULL))`
+      sql`plan != 'enterprise' OR metadata IS NOT NULL`
     ),
   })
 )

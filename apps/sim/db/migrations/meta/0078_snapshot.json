@@ -1,5 +1,5 @@
 {
-  "id": "bcde4b8a-ea42-472a-8c3d-a8b293a41cfd",
+  "id": "369a3e34-688b-4205-ab27-513786303304",
   "prevId": "26848621-8952-4e3c-a2b1-58e4834b4e75",
   "version": "7",
   "dialect": "postgresql",
@@ -3153,7 +3153,7 @@
       "checkConstraints": {
         "check_enterprise_metadata": {
           "name": "check_enterprise_metadata",
-          "value": "plan != 'enterprise' OR (metadata IS NOT NULL AND (metadata->>'perSeatAllowance' IS NOT NULL OR metadata->>'totalAllowance' IS NOT NULL))"
+          "value": "plan != 'enterprise' OR metadata IS NOT NULL"
         }
       },
       "isRLSEnabled": false

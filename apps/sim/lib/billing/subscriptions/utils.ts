@@ -4,6 +4,7 @@ import {
   DEFAULT_PRO_TIER_COST_LIMIT,
   DEFAULT_TEAM_TIER_COST_LIMIT,
 } from '@/lib/billing/constants'
+import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import { env } from '@/lib/env'
 
 export function checkEnterprisePlan(subscription: any): boolean {
@@ -19,10 +20,12 @@ export function checkTeamPlan(subscription: any): boolean {
 }
 
 /**
- * Calculate default usage limit for a subscription based on its type and metadata
- * This is now used as the minimum limit for paid plans
+ * Calculate the total subscription-level allowance (what the org/user gets for their base payment)
+ * - Pro: Fixed amount per user
+ * - Team: Seats * base price (pooled for the org)
+ * - Enterprise: Seats * per-seat price (pooled, with optional custom pricing in metadata)
  * @param subscription The subscription object
- * @returns The calculated default usage limit in dollars
+ * @returns The total subscription allowance in dollars
  */
 export function getSubscriptionAllowance(subscription: any): number {
   if (!subscription || subscription.status !== 'active') {
@@ -38,24 +41,31 @@ export function getSubscriptionAllowance(subscription: any): number {
     return seats * (env.TEAM_TIER_COST_LIMIT || DEFAULT_TEAM_TIER_COST_LIMIT)
   }
   if (subscription.plan === 'enterprise') {
-    const metadata = subscription.metadata || {}
+    const metadata = subscription.metadata as EnterpriseSubscriptionMetadata | undefined
 
-    if (metadata.perSeatAllowance) {
-      return seats * Number.parseFloat(metadata.perSeatAllowance)
+    // Enterprise uses per-seat pricing (pooled like Team)
+    // Custom per-seat price can be set in metadata
+    let perSeatPrice = env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
+    if (metadata?.perSeatPrice) {
+      const parsed = Number.parseFloat(String(metadata.perSeatPrice))
+      if (parsed > 0 && !Number.isNaN(parsed)) {
+        perSeatPrice = parsed
+      }
     }
 
-    if (metadata.totalAllowance) {
-      return Number.parseFloat(metadata.totalAllowance)
-    }
-
-    return seats * (env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT)
+    return seats * perSeatPrice
   }
 
   return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
 }
 
 /**
- * Per-user minimum limit used for validation and UI.
+ * Get the minimum usage limit for an individual user (used for validation)
+ * - Pro: User's plan minimum
+ * - Team: 0 (pooled model, no individual minimums)
+ * - Enterprise: 0 (pooled model, no individual minimums)
+ * @param subscription The subscription object
+ * @returns The per-user minimum limit in dollars
  */
 export function getPerUserMinimumLimit(subscription: any): number {
   if (!subscription || subscription.status !== 'active') {
@@ -74,17 +84,8 @@ export function getPerUserMinimumLimit(subscription: any): number {
     return 0
   }
   if (subscription.plan === 'enterprise') {
-    const metadata = subscription.metadata || {}
-
-    if (metadata.perSeatAllowance) {
-      return Number.parseFloat(metadata.perSeatAllowance)
-    }
-
-    if (metadata.totalAllowance) {
-      return Number.parseFloat(metadata.totalAllowance) / seats
-    }
-
-    return env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
+    // Enterprise works like Team - pooled usage, no individual minimums
+    return 0
   }
 
   return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS

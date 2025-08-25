@@ -1178,9 +1178,6 @@ export const auth = betterAuth({
                   priceId: env.STRIPE_FREE_PRICE_ID || '',
                   limits: {
                     cost: env.FREE_TIER_COST_LIMIT ?? DEFAULT_FREE_CREDITS,
-                    sharingEnabled: 0,
-                    multiplayerEnabled: 0,
-                    workspaceCollaborationEnabled: 0,
                   },
                 },
                 {
@@ -1188,9 +1185,6 @@ export const auth = betterAuth({
                   priceId: env.STRIPE_PRO_PRICE_ID || '',
                   limits: {
                     cost: env.PRO_TIER_COST_LIMIT ?? 20,
-                    sharingEnabled: 1,
-                    multiplayerEnabled: 0,
-                    workspaceCollaborationEnabled: 0,
                   },
                 },
                 {
@@ -1198,9 +1192,6 @@ export const auth = betterAuth({
                   priceId: env.STRIPE_TEAM_PRICE_ID || '',
                   limits: {
                     cost: env.TEAM_TIER_COST_LIMIT ?? 40, // $40 per seat
-                    sharingEnabled: 1,
-                    multiplayerEnabled: 1,
-                    workspaceCollaborationEnabled: 1,
                   },
                 },
               ],
