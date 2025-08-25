@@ -1268,6 +1268,29 @@ export const auth = betterAuth({
                   status: subscription.status,
                 })
 
+                // Update subscription table with period dates from Stripe
+                try {
+                  const { subscription: subscriptionTable } = await import('@/db/schema')
+                  await db
+                    .update(subscriptionTable)
+                    .set({
+                      periodStart: new Date(stripeSubscription.current_period_start * 1000),
+                      periodEnd: new Date(stripeSubscription.current_period_end * 1000),
+                    })
+                    .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscription.id))
+
+                  logger.info('Updated subscription period dates from Stripe', {
+                    stripeSubscriptionId: stripeSubscription.id,
+                    periodStart: new Date(stripeSubscription.current_period_start * 1000),
+                    periodEnd: new Date(stripeSubscription.current_period_end * 1000),
+                  })
+                } catch (error) {
+                  logger.error('Failed to update subscription period dates', {
+                    stripeSubscriptionId: stripeSubscription.id,
+                    error,
+                  })
+                }
+
                 // Auto-create organization for team plan purchases
                 try {
                   const { handleTeamPlanOrganization } = await import(
