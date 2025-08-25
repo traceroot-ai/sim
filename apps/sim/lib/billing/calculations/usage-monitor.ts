@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { getOrganizationSubscription, getPlanPricing } from '@/lib/billing/core/billing'
 import { getUserUsageLimit } from '@/lib/billing/core/usage'
 import { isBillingEnabled } from '@/lib/environment'
@@ -95,20 +95,19 @@ export async function checkUsageStatus(userId: string): Promise<UsageData> {
               .select({ userId: member.userId })
               .from(member)
               .where(eq(member.organizationId, org.id))
-            const pooled = await db
-              .select({ current: userStats.currentPeriodCost, total: userStats.totalCost })
-              .from(userStats)
-              .where(eq(userStats.userId, teamMembers[0]?.userId || ''))
+
+            // Get all team member usage in a single query to avoid N+1
             let pooledUsage = 0
-            for (const tm of teamMembers) {
-              const rec = await db
+            if (teamMembers.length > 0) {
+              const memberIds = teamMembers.map((tm) => tm.userId)
+              const allMemberStats = await db
                 .select({ current: userStats.currentPeriodCost, total: userStats.totalCost })
                 .from(userStats)
-                .where(eq(userStats.userId, tm.userId))
-                .limit(1)
-              if (rec.length) {
+                .where(inArray(userStats.userId, memberIds))
+
+              for (const stats of allMemberStats) {
                 pooledUsage += Number.parseFloat(
-                  rec[0].current?.toString() || rec[0].total.toString()
+                  stats.current?.toString() || stats.total.toString()
                 )
               }
             }
@@ -134,7 +133,9 @@ export async function checkUsageStatus(userId: string): Promise<UsageData> {
           }
         }
       }
-    } catch {}
+    } catch (error) {
+      logger.warn('Error checking organization usage limits', { error, userId })
+    }
 
     logger.info('Final usage statistics', {
       userId,

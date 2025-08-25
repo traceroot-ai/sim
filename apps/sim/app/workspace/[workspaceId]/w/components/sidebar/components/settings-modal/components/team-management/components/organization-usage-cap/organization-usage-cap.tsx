@@ -42,6 +42,17 @@ export function OrganizationUsageCap({ hasAdminAccess }: OrganizationUsageCapPro
     }
   }, [activeOrg?.id, loadOrganizationBillingData])
 
+  // Handle success message timeout
+  useEffect(() => {
+    if (updateSuccess) {
+      const timeoutId = setTimeout(() => {
+        setUpdateSuccess(false)
+      }, 3000)
+
+      return () => clearTimeout(timeoutId)
+    }
+  }, [updateSuccess])
+
   // Set initial value from billing data
   useEffect(() => {
     if (billingData?.totalUsageLimit) {
@@ -94,9 +105,6 @@ export function OrganizationUsageCap({ hasAdminAccess }: OrganizationUsageCapPro
       setUpdateSuccess(true)
       // Reload billing data to reflect changes
       await loadOrganizationBillingData(activeOrg.id)
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setUpdateSuccess(false), 3000)
 
       logger.info('Successfully updated organization usage cap', {
         organizationId: activeOrg.id,
