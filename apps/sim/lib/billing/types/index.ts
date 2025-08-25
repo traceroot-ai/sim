@@ -25,7 +25,6 @@ export interface UsageLimitInfo {
   canEdit: boolean
   minimumLimit: number
   plan: string
-  setBy: string | null
   updatedAt: Date | null
 }
 

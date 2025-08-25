@@ -1,4 +1,9 @@
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
+import {
+  DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
+  DEFAULT_FREE_CREDITS,
+  DEFAULT_PRO_TIER_COST_LIMIT,
+  DEFAULT_TEAM_TIER_COST_LIMIT,
+} from '@/lib/billing/constants'
 import { env } from '@/lib/env'
 
 export function checkEnterprisePlan(subscription: any): boolean {
@@ -19,7 +24,7 @@ export function checkTeamPlan(subscription: any): boolean {
  * @param subscription The subscription object
  * @returns The calculated default usage limit in dollars
  */
-export function calculateDefaultUsageLimit(subscription: any): number {
+export function getSubscriptionAllowance(subscription: any): number {
   if (!subscription || subscription.status !== 'active') {
     return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
   }
@@ -27,10 +32,10 @@ export function calculateDefaultUsageLimit(subscription: any): number {
   const seats = subscription.seats || 1
 
   if (subscription.plan === 'pro') {
-    return env.PRO_TIER_COST_LIMIT || 0
+    return env.PRO_TIER_COST_LIMIT || DEFAULT_PRO_TIER_COST_LIMIT
   }
   if (subscription.plan === 'team') {
-    return seats * (env.TEAM_TIER_COST_LIMIT || 0)
+    return seats * (env.TEAM_TIER_COST_LIMIT || DEFAULT_TEAM_TIER_COST_LIMIT)
   }
   if (subscription.plan === 'enterprise') {
     const metadata = subscription.metadata || {}
@@ -43,7 +48,40 @@ export function calculateDefaultUsageLimit(subscription: any): number {
       return Number.parseFloat(metadata.totalAllowance)
     }
 
-    return seats * (env.ENTERPRISE_TIER_COST_LIMIT || 0)
+    return seats * (env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT)
+  }
+
+  return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+}
+
+/**
+ * Per-user minimum limit used for validation and UI.
+ */
+export function getPerUserMinimumLimit(subscription: any): number {
+  if (!subscription || subscription.status !== 'active') {
+    return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+  }
+
+  const seats = subscription.seats || 1
+
+  if (subscription.plan === 'pro') {
+    return env.PRO_TIER_COST_LIMIT || DEFAULT_PRO_TIER_COST_LIMIT
+  }
+  if (subscription.plan === 'team') {
+    return 0
+  }
+  if (subscription.plan === 'enterprise') {
+    const metadata = subscription.metadata || {}
+
+    if (metadata.perSeatAllowance) {
+      return Number.parseFloat(metadata.perSeatAllowance)
+    }
+
+    if (metadata.totalAllowance) {
+      return Number.parseFloat(metadata.totalAllowance) / seats
+    }
+
+    return env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
   }
 
   return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
@@ -74,5 +112,5 @@ export function canEditUsageLimit(subscription: any): boolean {
  * @returns The minimum allowed usage limit in dollars
  */
 export function getMinimumUsageLimit(subscription: any): number {
-  return calculateDefaultUsageLimit(subscription)
+  return getPerUserMinimumLimit(subscription)
 }

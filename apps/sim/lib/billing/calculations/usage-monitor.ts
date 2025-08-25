@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm'
+import { getOrganizationSubscription, getPlanPricing } from '@/lib/billing/core/billing'
 import { getUserUsageLimit } from '@/lib/billing/core/usage'
 import { isBillingEnabled } from '@/lib/environment'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
-import { userStats } from '@/db/schema'
+import { member, organization, userStats } from '@/db/schema'
 
 const logger = createLogger('UsageMonitor')
 
@@ -44,7 +45,7 @@ export async function checkUsageStatus(userId: string): Promise<UsageData> {
       }
     }
 
-    // Get usage limit from user_stats (new method)
+    // Get usage limit from user_stats (per-user cap)
     const limit = await getUserUsageLimit(userId)
     logger.info('Using stored usage limit', { userId, limit })
 
@@ -72,9 +73,68 @@ export async function checkUsageStatus(userId: string): Promise<UsageData> {
     // Calculate percentage used
     const percentUsed = Math.min(Math.round((currentUsage / limit) * 100), 100)
 
-    // Check if usage exceeds threshold or limit
-    const isWarning = percentUsed >= WARNING_THRESHOLD && percentUsed < 100
-    const isExceeded = currentUsage >= limit
+    // Check org-level cap for team/enterprise pooled usage
+    let isExceeded = currentUsage >= limit
+    let isWarning = percentUsed >= WARNING_THRESHOLD && percentUsed < 100
+    try {
+      const memberships = await db
+        .select({ organizationId: member.organizationId })
+        .from(member)
+        .where(eq(member.userId, userId))
+      if (memberships.length > 0) {
+        for (const m of memberships) {
+          const orgRows = await db
+            .select({ id: organization.id, orgUsageLimit: organization.orgUsageLimit })
+            .from(organization)
+            .where(eq(organization.id, m.organizationId))
+            .limit(1)
+          if (orgRows.length) {
+            const org = orgRows[0]
+            // Sum pooled usage
+            const teamMembers = await db
+              .select({ userId: member.userId })
+              .from(member)
+              .where(eq(member.organizationId, org.id))
+            const pooled = await db
+              .select({ current: userStats.currentPeriodCost, total: userStats.totalCost })
+              .from(userStats)
+              .where(eq(userStats.userId, teamMembers[0]?.userId || ''))
+            let pooledUsage = 0
+            for (const tm of teamMembers) {
+              const rec = await db
+                .select({ current: userStats.currentPeriodCost, total: userStats.totalCost })
+                .from(userStats)
+                .where(eq(userStats.userId, tm.userId))
+                .limit(1)
+              if (rec.length) {
+                pooledUsage += Number.parseFloat(
+                  rec[0].current?.toString() || rec[0].total.toString()
+                )
+              }
+            }
+            // Determine org cap
+            let orgCap = org.orgUsageLimit ? Number.parseFloat(String(org.orgUsageLimit)) : 0
+            if (!orgCap || Number.isNaN(orgCap)) {
+              // Fall back to minimum billing amount from Stripe subscription
+              const orgSub = await getOrganizationSubscription(org.id)
+              if (orgSub?.seats) {
+                const { basePrice } = getPlanPricing(orgSub.plan, orgSub)
+                orgCap = (orgSub.seats || 1) * basePrice
+              } else {
+                // If no subscription, use team default
+                const { basePrice } = getPlanPricing('team')
+                orgCap = basePrice // Default to 1 seat minimum
+              }
+            }
+            if (pooledUsage >= orgCap) {
+              isExceeded = true
+              isWarning = false
+              break
+            }
+          }
+        }
+      }
+    } catch {}
 
     logger.info('Final usage statistics', {
       userId,

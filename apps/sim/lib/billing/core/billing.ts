@@ -1,5 +1,10 @@
 import { and, eq } from 'drizzle-orm'
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
+import {
+  DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
+  DEFAULT_FREE_CREDITS,
+  DEFAULT_PRO_TIER_COST_LIMIT,
+  DEFAULT_TEAM_TIER_COST_LIMIT,
+} from '@/lib/billing/constants'
 import {
   resetOrganizationBillingPeriod,
   resetUserBillingPeriod,
@@ -60,9 +65,9 @@ export function getPlanPricing(
     case 'free':
       return { basePrice: 0, minimum: 0 } // Free plan has no charges
     case 'pro':
-      return { basePrice: 20, minimum: 20 } // $20/month subscription
+      return { basePrice: DEFAULT_PRO_TIER_COST_LIMIT, minimum: DEFAULT_PRO_TIER_COST_LIMIT }
     case 'team':
-      return { basePrice: 40, minimum: 40 } // $40/seat/month subscription
+      return { basePrice: DEFAULT_TEAM_TIER_COST_LIMIT, minimum: DEFAULT_TEAM_TIER_COST_LIMIT }
     case 'enterprise':
       // Get per-seat pricing from metadata
       if (subscription?.metadata) {
@@ -74,11 +79,16 @@ export function getPlanPricing(
         // Validate perSeatAllowance is a positive number
         const perSeatAllowance = metadata.perSeatAllowance
         const perSeatPrice =
-          typeof perSeatAllowance === 'number' && perSeatAllowance > 0 ? perSeatAllowance : 100 // Fall back to default for invalid values
+          typeof perSeatAllowance === 'number' && perSeatAllowance > 0
+            ? perSeatAllowance
+            : DEFAULT_ENTERPRISE_TIER_COST_LIMIT
 
         return { basePrice: perSeatPrice, minimum: perSeatPrice }
       }
-      return { basePrice: 100, minimum: 100 } // Default enterprise pricing
+      return {
+        basePrice: DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
+        minimum: DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
+      }
     default:
       return { basePrice: 0, minimum: 0 }
   }
@@ -542,8 +552,9 @@ export async function processOrganizationOverageBilling(
 
     // Calculate total team usage across all members
     const { basePrice: basePricePerSeat } = getPlanPricing(subscription.plan, subscription)
-    const licensedSeats = subscription.seats || 1
-    const baseSubscriptionAmount = licensedSeats * basePricePerSeat // What Stripe already charged
+    // Use licensed seats from Stripe as source of truth for billing
+    const licensedSeats = subscription.seats || 1 // Default to 1 if not set
+    const baseSubscriptionAmount = licensedSeats * basePricePerSeat // What Stripe is charging for
 
     let totalTeamUsage = 0
     const memberUsageDetails = []
@@ -567,7 +578,6 @@ export async function processOrganizationOverageBilling(
     if (totalOverage <= 0) {
       logger.info('No overage to bill for organization', {
         organizationId,
-        licensedSeats,
         memberCount: members.length,
         totalTeamUsage,
         baseSubscriptionAmount,
@@ -773,6 +783,7 @@ export async function getSimplifiedBillingSummary(
   }
   organizationData?: {
     seatCount: number
+    memberCount: number
     totalBasePrice: number
     totalCurrentUsage: number
     totalOverage: number
@@ -807,8 +818,9 @@ export async function getSimplifiedBillingSummary(
         .where(eq(member.organizationId, organizationId))
 
       const { basePrice: basePricePerSeat } = getPlanPricing(subscription.plan, subscription)
+      // Use licensed seats from Stripe as source of truth
       const licensedSeats = subscription.seats || 1
-      const totalBasePrice = basePricePerSeat * licensedSeats // Based on licensed seats, not member count
+      const totalBasePrice = basePricePerSeat * licensedSeats // Based on Stripe subscription
 
       let totalCurrentUsage = 0
 
@@ -869,6 +881,7 @@ export async function getSimplifiedBillingSummary(
         },
         organizationData: {
           seatCount: licensedSeats,
+          memberCount: members.length,
           totalBasePrice,
           totalCurrentUsage,
           totalOverage,
