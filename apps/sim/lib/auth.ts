@@ -22,10 +22,7 @@ import {
 import { getBaseURL } from '@/lib/auth-client'
 import { authorizeSubscriptionReference } from '@/lib/billing/authorization'
 import { handleNewUser } from '@/lib/billing/core/usage'
-import {
-  autoCreateOrganizationForTeamPlan,
-  syncSubscriptionUsageLimits,
-} from '@/lib/billing/organization'
+import { syncSubscriptionUsageLimits } from '@/lib/billing/organization'
 import { getPlans } from '@/lib/billing/plans'
 import {
   handleInvoiceFinalized,
@@ -1224,12 +1221,11 @@ export const auth = betterAuth({
                   status: subscription.status,
                 })
 
-                // Auto-create organization and sync usage limits for the new subscription
+                // Sync usage limits for the new subscription
                 try {
-                  await autoCreateOrganizationForTeamPlan(subscription)
                   await syncSubscriptionUsageLimits(subscription)
                 } catch (error) {
-                  logger.error('[onSubscriptionComplete] Failed to handle subscription lifecycle', {
+                  logger.error('[onSubscriptionComplete] Failed to sync usage limits', {
                     subscriptionId: subscription.id,
                     referenceId: subscription.referenceId,
                     error,
@@ -1271,11 +1267,9 @@ export const auth = betterAuth({
                       referenceId: updatedSubscription.referenceId,
                     })
 
-                    await autoCreateOrganizationForTeamPlan(updatedSubscription)
                     await syncSubscriptionUsageLimits(updatedSubscription)
                   } else {
                     // Fallback to original subscription data
-                    await autoCreateOrganizationForTeamPlan(subscription)
                     await syncSubscriptionUsageLimits(subscription)
                   }
                 } catch (error) {

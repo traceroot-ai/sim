@@ -15,6 +15,67 @@ type SubscriptionData = {
 }
 
 /**
+ * Check if a user already owns an organization
+ */
+async function getUserOwnedOrganization(userId: string): Promise<string | null> {
+  const existingMemberships = await db
+    .select({ organizationId: schema.member.organizationId })
+    .from(schema.member)
+    .where(and(eq(schema.member.userId, userId), eq(schema.member.role, 'owner')))
+    .limit(1)
+
+  if (existingMemberships.length > 0) {
+    const [existingOrg] = await db
+      .select({ id: schema.organization.id })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, existingMemberships[0].organizationId))
+      .limit(1)
+
+    return existingOrg?.id || null
+  }
+
+  return null
+}
+
+/**
+ * Create a new organization and add user as owner
+ */
+async function createOrganizationWithOwner(
+  userId: string,
+  organizationName: string,
+  organizationSlug: string,
+  metadata: Record<string, any> = {}
+): Promise<string> {
+  const orgId = `org_${crypto.randomUUID()}`
+
+  const [newOrg] = await db
+    .insert(schema.organization)
+    .values({
+      id: orgId,
+      name: organizationName,
+      slug: organizationSlug,
+      metadata,
+    })
+    .returning({ id: schema.organization.id })
+
+  // Add user as owner/admin of the organization
+  await db.insert(schema.member).values({
+    id: crypto.randomUUID(),
+    userId: userId,
+    organizationId: newOrg.id,
+    role: 'owner',
+  })
+
+  logger.info('Created organization with owner', {
+    userId,
+    organizationId: newOrg.id,
+    organizationName,
+  })
+
+  return newOrg.id
+}
+
+/**
  * Create organization for team plan upgrade (called proactively during upgrade)
  */
 export async function createOrganizationForTeamPlan(
@@ -25,151 +86,30 @@ export async function createOrganizationForTeamPlan(
 ): Promise<string> {
   try {
     // Check if user already owns an organization
-    const existingMemberships = await db
-      .select({ organizationId: schema.member.organizationId })
-      .from(schema.member)
-      .where(and(eq(schema.member.userId, userId), eq(schema.member.role, 'owner')))
-      .limit(1)
-
-    if (existingMemberships.length > 0) {
-      // User already has an organization, return its ID
-      const [existingOrg] = await db
-        .select({ id: schema.organization.id })
-        .from(schema.organization)
-        .where(eq(schema.organization.id, existingMemberships[0].organizationId))
-        .limit(1)
-
-      if (existingOrg) {
-        return existingOrg.id
-      }
+    const existingOrgId = await getUserOwnedOrganization(userId)
+    if (existingOrgId) {
+      return existingOrgId
     }
 
-    // Create new organization with org_ prefix
+    // Create new organization
     const organizationName = userName || `${userEmail || 'User'}'s Team`
-    const orgId = `org_${crypto.randomUUID()}`
+    const slug = organizationSlug || `${userId}-team-${Date.now()}`
 
-    const [newOrg] = await db
-      .insert(schema.organization)
-      .values({
-        id: orgId,
-        name: organizationName,
-        slug: organizationSlug || `${userId}-team-${Date.now()}`,
-        metadata: {
-          createdForTeamPlan: true,
-          originalUserId: userId,
-        },
-      })
-      .returning({ id: schema.organization.id })
-
-    // Add user as owner/admin of the organization
-    await db.insert(schema.member).values({
-      id: crypto.randomUUID(),
-      userId: userId,
-      organizationId: newOrg.id,
-      role: 'owner',
+    const orgId = await createOrganizationWithOwner(userId, organizationName, slug, {
+      createdForTeamPlan: true,
+      originalUserId: userId,
     })
 
     // Note: Organization activation must be handled by the client-side
     // after this function returns the organizationId
 
-    logger.info('Created organization for team plan', {
-      userId,
-      organizationId: newOrg.id,
-      organizationName,
-    })
-
-    return newOrg.id
+    return orgId
   } catch (error) {
     logger.error('Failed to create organization for team plan', {
       userId,
       error,
     })
     throw error
-  }
-}
-
-/**
- * Auto-create organization for team/enterprise plans if user doesn't have one
- * @deprecated - Use createOrganizationForTeamPlan instead for proactive creation
- */
-export async function autoCreateOrganizationForTeamPlan(subscription: SubscriptionData) {
-  if (
-    (subscription.plan === 'team' || subscription.plan === 'enterprise') &&
-    subscription.referenceId
-  ) {
-    try {
-      // Check if referenceId is a user (not already an organization)
-      const users = await db
-        .select({ id: schema.user.id, name: schema.user.name, email: schema.user.email })
-        .from(schema.user)
-        .where(eq(schema.user.id, subscription.referenceId))
-        .limit(1)
-
-      if (users.length > 0) {
-        const user = users[0]
-
-        // Check if user already owns an organization
-        const existingMemberships = await db
-          .select({ organizationId: schema.member.organizationId })
-          .from(schema.member)
-          .where(and(eq(schema.member.userId, user.id), eq(schema.member.role, 'owner')))
-          .limit(1)
-
-        if (existingMemberships.length === 0) {
-          // Create organization for the user with org_ prefix
-          const organizationName = `${user.name || user.email}'s Team`
-          const orgId = `org_${crypto.randomUUID()}`
-          const [newOrg] = await db
-            .insert(schema.organization)
-            .values({
-              id: orgId,
-              name: organizationName,
-              slug: `${user.id}-team-${Date.now()}`,
-              metadata: {
-                createdFromTeamPlan: true,
-                subscriptionId: subscription.id,
-              },
-            })
-            .returning({ id: schema.organization.id })
-
-          // Add user as owner/admin of the organization
-          await db.insert(schema.member).values({
-            id: crypto.randomUUID(),
-            userId: user.id,
-            organizationId: newOrg.id,
-            role: 'owner',
-          })
-
-          // Update subscription to reference the organization instead of the user
-          await db
-            .update(schema.subscription)
-            .set({
-              referenceId: newOrg.id,
-              metadata: {
-                originalUserId: user.id,
-                convertedToOrganization: true,
-              },
-            })
-            .where(eq(schema.subscription.id, subscription.id))
-
-          logger.info('Auto-created organization for team plan subscription', {
-            userId: user.id,
-            organizationId: newOrg.id,
-            organizationName,
-            subscriptionId: subscription.id,
-          })
-
-          // Update subscription reference for usage limit syncing
-          subscription.referenceId = newOrg.id
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to auto-create organization for team plan', {
-        subscriptionId: subscription.id,
-        referenceId: subscription.referenceId,
-        error,
-      })
-    }
   }
 }
 
