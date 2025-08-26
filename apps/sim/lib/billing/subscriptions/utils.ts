@@ -7,6 +7,34 @@ import {
 import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import { env } from '@/lib/env'
 
+/**
+ * Get the free tier limit from env or fallback to default
+ */
+export function getFreeTierLimit(): number {
+  return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+}
+
+/**
+ * Get the pro tier limit from env or fallback to default
+ */
+export function getProTierLimit(): number {
+  return env.PRO_TIER_COST_LIMIT || DEFAULT_PRO_TIER_COST_LIMIT
+}
+
+/**
+ * Get the team tier limit per seat from env or fallback to default
+ */
+export function getTeamTierLimitPerSeat(): number {
+  return env.TEAM_TIER_COST_LIMIT || DEFAULT_TEAM_TIER_COST_LIMIT
+}
+
+/**
+ * Get the enterprise tier limit per seat from env or fallback to default
+ */
+export function getEnterpriseTierLimitPerSeat(): number {
+  return env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
+}
+
 export function checkEnterprisePlan(subscription: any): boolean {
   return subscription?.plan === 'enterprise' && subscription?.status === 'active'
 }
@@ -29,23 +57,23 @@ export function checkTeamPlan(subscription: any): boolean {
  */
 export function getSubscriptionAllowance(subscription: any): number {
   if (!subscription || subscription.status !== 'active') {
-    return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+    return getFreeTierLimit()
   }
 
   const seats = subscription.seats || 1
 
   if (subscription.plan === 'pro') {
-    return env.PRO_TIER_COST_LIMIT || DEFAULT_PRO_TIER_COST_LIMIT
+    return getProTierLimit()
   }
   if (subscription.plan === 'team') {
-    return seats * (env.TEAM_TIER_COST_LIMIT || DEFAULT_TEAM_TIER_COST_LIMIT)
+    return seats * getTeamTierLimitPerSeat()
   }
   if (subscription.plan === 'enterprise') {
     const metadata = subscription.metadata as EnterpriseSubscriptionMetadata | undefined
 
     // Enterprise uses per-seat pricing (pooled like Team)
     // Custom per-seat price can be set in metadata
-    let perSeatPrice = env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
+    let perSeatPrice = getEnterpriseTierLimitPerSeat()
     if (metadata?.perSeatPrice) {
       const parsed = Number.parseFloat(String(metadata.perSeatPrice))
       if (parsed > 0 && !Number.isNaN(parsed)) {
@@ -56,7 +84,7 @@ export function getSubscriptionAllowance(subscription: any): number {
     return seats * perSeatPrice
   }
 
-  return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+  return getFreeTierLimit()
 }
 
 /**
@@ -69,23 +97,23 @@ export function getSubscriptionAllowance(subscription: any): number {
  */
 export function getPerUserMinimumLimit(subscription: any): number {
   if (!subscription || subscription.status !== 'active') {
-    return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+    return getFreeTierLimit()
   }
 
   const seats = subscription.seats || 1
 
   if (subscription.plan === 'pro') {
-    return env.PRO_TIER_COST_LIMIT || DEFAULT_PRO_TIER_COST_LIMIT
+    return getProTierLimit()
   }
   if (subscription.plan === 'team') {
     // For team plans, return the total pooled limit (seats * cost per seat)
     // This becomes the user's individual limit representing their share of the team pool
-    return seats * (env.TEAM_TIER_COST_LIMIT || DEFAULT_TEAM_TIER_COST_LIMIT)
+    return seats * getTeamTierLimitPerSeat()
   }
   if (subscription.plan === 'enterprise') {
     // For enterprise plans, return the total pooled limit (seats * cost per seat)
     // This becomes the user's individual limit representing their share of the enterprise pool
-    let perSeatPrice = env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
+    let perSeatPrice = getEnterpriseTierLimitPerSeat()
     if (subscription.metadata?.perSeatPrice) {
       const parsed = Number.parseFloat(String(subscription.metadata.perSeatPrice))
       if (parsed > 0 && !Number.isNaN(parsed)) {
@@ -95,7 +123,7 @@ export function getPerUserMinimumLimit(subscription: any): number {
     return seats * perSeatPrice
   }
 
-  return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS
+  return getFreeTierLimit()
 }
 
 /**

@@ -1,7 +1,10 @@
 import { eq } from 'drizzle-orm'
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
-import { canEditUsageLimit, getPerUserMinimumLimit } from '@/lib/billing/subscriptions/utils'
+import {
+  canEditUsageLimit,
+  getFreeTierLimit,
+  getPerUserMinimumLimit,
+} from '@/lib/billing/subscriptions/utils'
 import type { BillingData, UsageData, UsageLimitInfo } from '@/lib/billing/types'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
@@ -18,7 +21,7 @@ export async function handleNewUser(userId: string): Promise<void> {
     await db.insert(userStats).values({
       id: crypto.randomUUID(),
       userId: userId,
-      currentUsageLimit: DEFAULT_FREE_CREDITS.toString(),
+      currentUsageLimit: getFreeTierLimit().toString(),
       usageLimitUpdatedAt: new Date(),
     })
 
@@ -58,7 +61,7 @@ export async function getUserUsageData(userId: string): Promise<UsageData> {
       // Free/Pro: Use individual user limit from userStats
       limit = stats.currentUsageLimit
         ? Number.parseFloat(stats.currentUsageLimit)
-        : DEFAULT_FREE_CREDITS
+        : getFreeTierLimit()
     } else {
       // Team/Enterprise: Use organization limit (single source of truth)
       const orgData = await db
@@ -128,7 +131,7 @@ export async function getUserUsageLimitInfo(userId: string): Promise<UsageLimitI
       // Free/Pro: Use individual limits
       currentLimit = stats.currentUsageLimit
         ? Number.parseFloat(stats.currentUsageLimit)
-        : DEFAULT_FREE_CREDITS
+        : getFreeTierLimit()
       minimumLimit = getPerUserMinimumLimit(subscription)
       canEdit = canEditUsageLimit(subscription)
     } else {
@@ -190,7 +193,7 @@ export async function initializeUserUsageLimit(userId: string): Promise<void> {
     id: crypto.randomUUID(),
     userId,
     // Team/enterprise: null (use org limit), Free/Pro: individual limit
-    currentUsageLimit: isTeamOrEnterprise ? null : DEFAULT_FREE_CREDITS.toString(),
+    currentUsageLimit: isTeamOrEnterprise ? null : getFreeTierLimit().toString(),
     usageLimitUpdatedAt: new Date(),
   })
 
@@ -409,7 +412,7 @@ export async function syncUsageLimitsFromSubscription(userId: string): Promise<v
     await db
       .update(userStats)
       .set({
-        currentUsageLimit: DEFAULT_FREE_CREDITS.toString(),
+        currentUsageLimit: getFreeTierLimit().toString(),
         usageLimitUpdatedAt: new Date(),
       })
       .where(eq(userStats.userId, userId))
@@ -466,7 +469,7 @@ export async function getTeamUsageLimits(organizationId: string): Promise<
       userId: memberData.userId,
       userName: memberData.userName,
       userEmail: memberData.userEmail,
-      currentLimit: Number.parseFloat(memberData.currentLimit || DEFAULT_FREE_CREDITS.toString()),
+      currentLimit: Number.parseFloat(memberData.currentLimit || getFreeTierLimit().toString()),
       currentUsage: Number.parseFloat(memberData.currentPeriodCost || '0'),
       totalCost: Number.parseFloat(memberData.totalCost || '0'),
       lastActive: memberData.lastActive,

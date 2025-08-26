@@ -1,13 +1,13 @@
 import { and, eq } from 'drizzle-orm'
-import {
-  DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
-  DEFAULT_FREE_CREDITS,
-  DEFAULT_PRO_TIER_COST_LIMIT,
-  DEFAULT_TEAM_TIER_COST_LIMIT,
-} from '@/lib/billing/constants'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { getUserUsageData } from '@/lib/billing/core/usage'
 import { requireStripeClient } from '@/lib/billing/stripe-client'
+import {
+  getEnterpriseTierLimitPerSeat,
+  getFreeTierLimit,
+  getProTierLimit,
+  getTeamTierLimitPerSeat,
+} from '@/lib/billing/subscriptions/utils'
 import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
@@ -62,9 +62,9 @@ export function getPlanPricing(
     case 'free':
       return { basePrice: 0, minimum: 0 } // Free plan has no charges
     case 'pro':
-      return { basePrice: DEFAULT_PRO_TIER_COST_LIMIT, minimum: DEFAULT_PRO_TIER_COST_LIMIT }
+      return { basePrice: getProTierLimit(), minimum: getProTierLimit() }
     case 'team':
-      return { basePrice: DEFAULT_TEAM_TIER_COST_LIMIT, minimum: DEFAULT_TEAM_TIER_COST_LIMIT }
+      return { basePrice: getTeamTierLimitPerSeat(), minimum: getTeamTierLimitPerSeat() }
     case 'enterprise':
       // Enterprise uses per-seat pricing like Team plans
       // Custom per-seat price can be set in metadata
@@ -83,8 +83,8 @@ export function getPlanPricing(
       }
       // Default enterprise per-seat pricing
       return {
-        basePrice: DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
-        minimum: DEFAULT_ENTERPRISE_TIER_COST_LIMIT,
+        basePrice: getEnterpriseTierLimitPerSeat(),
+        minimum: getEnterpriseTierLimitPerSeat(),
       }
     default:
       return { basePrice: 0, minimum: 0 }
@@ -931,7 +931,7 @@ function getDefaultBillingSummary(type: 'individual' | 'organization') {
     currentUsage: 0,
     overageAmount: 0,
     totalProjected: 0,
-    usageLimit: DEFAULT_FREE_CREDITS,
+    usageLimit: getFreeTierLimit(),
     percentUsed: 0,
     isWarning: false,
     isExceeded: false,
@@ -949,7 +949,7 @@ function getDefaultBillingSummary(type: 'individual' | 'organization') {
     // Usage details
     usage: {
       current: 0,
-      limit: DEFAULT_FREE_CREDITS,
+      limit: getFreeTierLimit(),
       percentUsed: 0,
       isWarning: false,
       isExceeded: false,

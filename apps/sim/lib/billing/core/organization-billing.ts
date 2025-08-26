@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
 import { getPlanPricing } from '@/lib/billing/core/billing'
+import { getFreeTierLimit } from '@/lib/billing/subscriptions/utils'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
 import { member, organization, subscription, user, userStats } from '@/db/schema'
@@ -110,7 +110,7 @@ export async function getOrganizationBillingData(
     // Process member data
     const members: MemberUsageData[] = membersWithUsage.map((memberRecord) => {
       const currentUsage = Number(memberRecord.currentPeriodCost || 0)
-      const usageLimit = Number(memberRecord.currentUsageLimit || DEFAULT_FREE_CREDITS)
+      const usageLimit = Number(memberRecord.currentUsageLimit || getFreeTierLimit())
       const percentUsed = usageLimit > 0 ? (currentUsage / usageLimit) * 100 : 0
 
       return {

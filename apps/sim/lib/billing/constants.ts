@@ -3,7 +3,7 @@
  */
 
 /**
- * Default free credits (in dollars) for new users
+ * Fallback free credits (in dollars) when env var is not set
  */
 export const DEFAULT_FREE_CREDITS = 10
 

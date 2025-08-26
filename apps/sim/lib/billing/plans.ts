@@ -1,4 +1,8 @@
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
+import {
+  getFreeTierLimit,
+  getProTierLimit,
+  getTeamTierLimitPerSeat,
+} from '@/lib/billing/subscriptions/utils'
 import { env } from '@/lib/env'
 
 export interface BillingPlan {
@@ -18,21 +22,21 @@ export function getPlans(): BillingPlan[] {
       name: 'free',
       priceId: env.STRIPE_FREE_PRICE_ID || '',
       limits: {
-        cost: env.FREE_TIER_COST_LIMIT ?? DEFAULT_FREE_CREDITS,
+        cost: getFreeTierLimit(),
       },
     },
     {
       name: 'pro',
       priceId: env.STRIPE_PRO_PRICE_ID || '',
       limits: {
-        cost: env.PRO_TIER_COST_LIMIT ?? 20,
+        cost: getProTierLimit(),
       },
     },
     {
       name: 'team',
       priceId: env.STRIPE_TEAM_PRICE_ID || '',
       limits: {
-        cost: env.TEAM_TIER_COST_LIMIT ?? 40, // $40 per seat
+        cost: getTeamTierLimitPerSeat(), // Per seat
       },
     },
   ]
@@ -50,5 +54,5 @@ export function getPlanByName(planName: string): BillingPlan | undefined {
  */
 export function getPlanLimits(planName: string): number {
   const plan = getPlanByName(planName)
-  return plan?.limits.cost ?? DEFAULT_FREE_CREDITS
+  return plan?.limits.cost ?? getFreeTierLimit()
 }

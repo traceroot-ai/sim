@@ -1,9 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm'
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
 import {
   checkEnterprisePlan,
   checkProPlan,
   checkTeamPlan,
+  getFreeTierLimit,
   getPerUserMinimumLimit,
 } from '@/lib/billing/subscriptions/utils'
 import type { UserSubscriptionState } from '@/lib/billing/types'
@@ -156,7 +156,7 @@ export async function hasExceededCostLimit(userId: string): Promise<boolean> {
     const subscription = await getHighestPrioritySubscription(userId)
 
     // Calculate usage limit
-    let limit = DEFAULT_FREE_CREDITS // Default free tier limit
+    let limit = getFreeTierLimit() // Default free tier limit
     if (subscription) {
       limit = getPerUserMinimumLimit(subscription)
       logger.info('Using subscription-based limit', {
@@ -229,7 +229,7 @@ export async function getUserSubscriptionState(userId: string): Promise<UserSubs
     // Check cost limit using already-fetched user stats
     let hasExceededLimit = false
     if (isProd && statsRecords.length > 0) {
-      let limit = DEFAULT_FREE_CREDITS // Default free tier limit
+      let limit = getFreeTierLimit() // Default free tier limit
       if (subscription) {
         limit = getPerUserMinimumLimit(subscription)
       }
