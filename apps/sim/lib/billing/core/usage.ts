@@ -10,9 +10,27 @@ import { member, user, userStats } from '@/db/schema'
 const logger = createLogger('UsageManagement')
 
 /**
- * Consolidated usage management module
- * Handles user usage tracking, limits, and monitoring
+ * Handle new user setup when they join the platform
+ * Creates userStats record with default free credits
  */
+export async function handleNewUser(userId: string): Promise<void> {
+  try {
+    await db.insert(userStats).values({
+      id: crypto.randomUUID(),
+      userId: userId,
+      currentUsageLimit: DEFAULT_FREE_CREDITS.toString(),
+      usageLimitUpdatedAt: new Date(),
+    })
+
+    logger.info('User stats record created for new user', { userId })
+  } catch (error) {
+    logger.error('Failed to create user stats record for new user', {
+      userId,
+      error,
+    })
+    throw error
+  }
+}
 
 /**
  * Get comprehensive usage data for a user
@@ -336,14 +354,7 @@ export async function syncUsageLimitsFromSubscription(userId: string): Promise<v
       .limit(1)
 
     if (currentUserStats.length === 0) {
-      // Create new user stats with default limit
-      await db.insert(userStats).values({
-        id: crypto.randomUUID(),
-        userId,
-        currentUsageLimit: defaultLimit.toString(),
-        usageLimitUpdatedAt: new Date(),
-      })
-      logger.info('Created usage stats with synced limit', { userId, limit: defaultLimit })
+      logger.info('User stats not found, skipping sync', { userId, limit: defaultLimit })
       return
     }
 

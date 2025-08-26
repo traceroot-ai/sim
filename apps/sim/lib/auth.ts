@@ -20,7 +20,18 @@ import {
   renderPasswordResetEmail,
 } from '@/components/emails/render-email'
 import { getBaseURL } from '@/lib/auth-client'
-import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
+import { authorizeSubscriptionReference } from '@/lib/billing/authorization'
+import { handleNewUser } from '@/lib/billing/core/usage'
+import {
+  autoCreateOrganizationForTeamPlan,
+  syncSubscriptionUsageLimits,
+} from '@/lib/billing/organization'
+import { getPlans } from '@/lib/billing/plans'
+import {
+  handleInvoiceFinalized,
+  handleInvoicePaymentFailed,
+  handleInvoicePaymentSucceeded,
+} from '@/lib/billing/webhooks/invoices'
 import { sendEmail } from '@/lib/email/mailer'
 import { getFromEmailAddress } from '@/lib/email/utils'
 import { quickValidateEmail } from '@/lib/email/validation'
@@ -1152,19 +1163,16 @@ export const auth = betterAuth({
             stripeClient,
             stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || '',
             createCustomerOnSignUp: true,
-            onCustomerCreate: async ({ stripeCustomer, user }, request) => {
-              logger.info('Stripe customer created', {
-                customerId: stripeCustomer.id,
+            onCustomerCreate: async ({ stripeCustomer, user }) => {
+              logger.info('[onCustomerCreate] Stripe customer created', {
+                stripeCustomerId: stripeCustomer.id,
                 userId: user.id,
               })
 
-              // Initialize usage limits for new user
               try {
-                const { initializeUserUsageLimit } = await import('@/lib/billing')
-                await initializeUserUsageLimit(user.id)
-                logger.info('Usage limits initialized for new user', { userId: user.id })
+                await handleNewUser(user.id)
               } catch (error) {
-                logger.error('Failed to initialize usage limits for new user', {
+                logger.error('[onCustomerCreate] Failed to handle new user setup', {
                   userId: user.id,
                   error,
                 })
@@ -1172,52 +1180,11 @@ export const auth = betterAuth({
             },
             subscription: {
               enabled: true,
-              plans: [
-                {
-                  name: 'free',
-                  priceId: env.STRIPE_FREE_PRICE_ID || '',
-                  limits: {
-                    cost: env.FREE_TIER_COST_LIMIT ?? DEFAULT_FREE_CREDITS,
-                  },
-                },
-                {
-                  name: 'pro',
-                  priceId: env.STRIPE_PRO_PRICE_ID || '',
-                  limits: {
-                    cost: env.PRO_TIER_COST_LIMIT ?? 20,
-                  },
-                },
-                {
-                  name: 'team',
-                  priceId: env.STRIPE_TEAM_PRICE_ID || '',
-                  limits: {
-                    cost: env.TEAM_TIER_COST_LIMIT ?? 40, // $40 per seat
-                  },
-                },
-              ],
-              authorizeReference: async ({ user, referenceId, action }) => {
-                // User can always manage their own subscriptions
-                if (referenceId === user.id) {
-                  return true
-                }
-
-                // Check if referenceId is an organizationId the user has admin rights to
-                const members = await db
-                  .select()
-                  .from(schema.member)
-                  .where(
-                    and(
-                      eq(schema.member.userId, user.id),
-                      eq(schema.member.organizationId, referenceId)
-                    )
-                  )
-
-                const member = members[0]
-
-                // Allow if the user is an owner or admin of the organization
-                return member?.role === 'owner' || member?.role === 'admin'
+              plans: getPlans(),
+              authorizeReference: async ({ user, referenceId }) => {
+                return await authorizeSubscriptionReference(user.id, referenceId)
               },
-              getCheckoutSessionParams: async ({ user, plan, subscription }, request) => {
+              getCheckoutSessionParams: async ({ plan, subscription }) => {
                 if (plan.name === 'team') {
                   return {
                     params: {
@@ -1244,149 +1211,151 @@ export const auth = betterAuth({
                 }
               },
               onSubscriptionComplete: async ({
-                event,
-                stripeSubscription,
                 subscription,
               }: {
                 event: Stripe.Event
                 stripeSubscription: Stripe.Subscription
                 subscription: any
               }) => {
-                logger.info('Subscription created', {
+                logger.info('[onSubscriptionComplete] Subscription created', {
                   subscriptionId: subscription.id,
                   referenceId: subscription.referenceId,
                   plan: subscription.plan,
                   status: subscription.status,
                 })
 
-                // Update subscription table with period dates from Stripe
+                // Auto-create organization and sync usage limits for the new subscription
                 try {
-                  const { subscription: subscriptionTable } = await import('@/db/schema')
-                  await db
-                    .update(subscriptionTable)
-                    .set({
-                      periodStart: new Date(stripeSubscription.current_period_start * 1000),
-                      periodEnd: new Date(stripeSubscription.current_period_end * 1000),
-                    })
-                    .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscription.id))
-
-                  logger.info('Updated subscription period dates from Stripe', {
-                    stripeSubscriptionId: stripeSubscription.id,
-                    periodStart: new Date(stripeSubscription.current_period_start * 1000),
-                    periodEnd: new Date(stripeSubscription.current_period_end * 1000),
-                  })
+                  await autoCreateOrganizationForTeamPlan(subscription)
+                  await syncSubscriptionUsageLimits(subscription)
                 } catch (error) {
-                  logger.error('Failed to update subscription period dates', {
-                    stripeSubscriptionId: stripeSubscription.id,
-                    error,
-                  })
-                }
-
-                // Auto-create organization for team plan purchases
-                try {
-                  const { handleTeamPlanOrganization } = await import(
-                    '@/lib/billing/team-management'
-                  )
-                  await handleTeamPlanOrganization(subscription)
-                } catch (error) {
-                  logger.error('Failed to handle team plan organization creation', {
+                  logger.error('[onSubscriptionComplete] Failed to handle subscription lifecycle', {
                     subscriptionId: subscription.id,
                     referenceId: subscription.referenceId,
                     error,
                   })
                 }
-
-                // Initialize billing period and sync usage limits
-                try {
-                  const { initializeBillingPeriod } = await import(
-                    '@/lib/billing/core/billing-periods'
-                  )
-                  const { syncSubscriptionUsageLimits } = await import(
-                    '@/lib/billing/team-management'
-                  )
-
-                  // Sync usage limits for user or organization members
-                  await syncSubscriptionUsageLimits(subscription)
-
-                  // Initialize billing period for new subscription using Stripe dates
-                  if (subscription.plan !== 'free') {
-                    const stripeStart = new Date(stripeSubscription.current_period_start * 1000)
-                    const stripeEnd = new Date(stripeSubscription.current_period_end * 1000)
-
-                    await initializeBillingPeriod(subscription.referenceId, stripeStart, stripeEnd)
-                    logger.info(
-                      'Billing period initialized for new subscription with Stripe dates',
-                      {
-                        referenceId: subscription.referenceId,
-                        billingStart: stripeStart,
-                        billingEnd: stripeEnd,
-                      }
-                    )
-                  }
-                } catch (error) {
-                  logger.error(
-                    'Failed to sync usage limits or initialize billing period after subscription creation',
-                    {
-                      referenceId: subscription.referenceId,
-                      error,
-                    }
-                  )
-                }
               },
               onSubscriptionUpdate: async ({
-                event,
                 subscription,
               }: {
                 event: Stripe.Event
                 subscription: any
               }) => {
-                logger.info('Subscription updated', {
+                logger.info('[onSubscriptionUpdate] Subscription updated', {
                   subscriptionId: subscription.id,
                   status: subscription.status,
                   plan: subscription.plan,
                 })
 
-                // Auto-create organization for team plan upgrades (free -> team)
                 try {
-                  const { handleTeamPlanOrganization } = await import(
-                    '@/lib/billing/team-management'
-                  )
-                  await handleTeamPlanOrganization(subscription)
-                } catch (error) {
-                  logger.error('Failed to handle team plan organization creation on update', {
-                    subscriptionId: subscription.id,
-                    referenceId: subscription.referenceId,
-                    error,
-                  })
-                }
+                  // Get fresh subscription data from the database to avoid race conditions
+                  const freshSubscription = await db
+                    .select()
+                    .from(schema.subscription)
+                    .where(eq(schema.subscription.id, subscription.id))
+                    .limit(1)
 
-                // Sync usage limits for the user/organization
-                try {
-                  const { syncSubscriptionUsageLimits } = await import(
-                    '@/lib/billing/team-management'
-                  )
-                  await syncSubscriptionUsageLimits(subscription)
+                  if (freshSubscription.length > 0) {
+                    const updatedSubscription = {
+                      id: freshSubscription[0].id,
+                      plan: freshSubscription[0].plan,
+                      referenceId: freshSubscription[0].referenceId,
+                      status: freshSubscription[0].status || 'active',
+                      seats: freshSubscription[0].seats || undefined,
+                    }
+
+                    logger.info('[onSubscriptionUpdate] Using fresh subscription data', {
+                      subscriptionId: updatedSubscription.id,
+                      plan: updatedSubscription.plan,
+                      referenceId: updatedSubscription.referenceId,
+                    })
+
+                    await autoCreateOrganizationForTeamPlan(updatedSubscription)
+                    await syncSubscriptionUsageLimits(updatedSubscription)
+                  } else {
+                    // Fallback to original subscription data
+                    await autoCreateOrganizationForTeamPlan(subscription)
+                    await syncSubscriptionUsageLimits(subscription)
+                  }
                 } catch (error) {
-                  logger.error('Failed to sync usage limits after subscription update', {
-                    referenceId: subscription.referenceId,
+                  logger.error('[onSubscriptionUpdate] Failed to handle subscription lifecycle', {
+                    subscriptionId: subscription.id,
                     error,
                   })
                 }
               },
               onSubscriptionDeleted: async ({
-                event,
-                stripeSubscription,
                 subscription,
               }: {
                 event: Stripe.Event
                 stripeSubscription: Stripe.Subscription
                 subscription: any
               }) => {
-                logger.info('Subscription deleted', {
+                logger.info('[onSubscriptionDeleted] Subscription deleted', {
                   subscriptionId: subscription.id,
                   referenceId: subscription.referenceId,
                 })
+
+                // Reset usage limits back to free tier defaults
+                try {
+                  // This will sync limits based on the now-inactive subscription (defaulting to free tier)
+                  await syncSubscriptionUsageLimits(subscription)
+
+                  logger.info('[onSubscriptionDeleted] Reset usage limits to free tier', {
+                    subscriptionId: subscription.id,
+                    referenceId: subscription.referenceId,
+                  })
+                } catch (error) {
+                  logger.error('[onSubscriptionDeleted] Failed to reset usage limits', {
+                    subscriptionId: subscription.id,
+                    referenceId: subscription.referenceId,
+                    error,
+                  })
+                }
               },
+            },
+            onEvent: async (event: Stripe.Event) => {
+              logger.info('[onEvent] Received Stripe webhook', {
+                eventId: event.id,
+                eventType: event.type,
+              })
+
+              try {
+                // Handle invoice events
+                switch (event.type) {
+                  case 'invoice.payment_succeeded': {
+                    await handleInvoicePaymentSucceeded(event)
+                    break
+                  }
+                  case 'invoice.payment_failed': {
+                    await handleInvoicePaymentFailed(event)
+                    break
+                  }
+                  case 'invoice.finalized': {
+                    await handleInvoiceFinalized(event)
+                    break
+                  }
+                  default:
+                    logger.info('[onEvent] Ignoring unsupported webhook event', {
+                      eventId: event.id,
+                      eventType: event.type,
+                    })
+                    break
+                }
+
+                logger.info('[onEvent] Successfully processed webhook', {
+                  eventId: event.id,
+                  eventType: event.type,
+                })
+              } catch (error) {
+                logger.error('[onEvent] Failed to process webhook', {
+                  eventId: event.id,
+                  eventType: event.type,
+                  error,
+                })
+                throw error // Re-throw to signal webhook failure to Stripe
+              }
             },
           }),
           // Add organization plugin as a separate entry in the plugins array
@@ -1477,8 +1446,8 @@ export const auth = betterAuth({
               }
             },
             organizationCreation: {
-              afterCreate: async ({ organization, member, user }) => {
-                logger.info('Organization created', {
+              afterCreate: async ({ organization, user }) => {
+                logger.info('[organizationCreation.afterCreate] Organization created', {
                   organizationId: organization.id,
                   creatorId: user.id,
                 })

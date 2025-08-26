@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge, Progress, Skeleton } from '@/components/ui'
-import { useSession, useSubscription } from '@/lib/auth-client'
+import { useSession } from '@/lib/auth-client'
 import { createLogger } from '@/lib/logs/console/logger'
+import { useSubscriptionUpgrade } from '@/lib/subscription/upgrade'
 import { cn } from '@/lib/utils'
 import {
   CancelSubscription,
@@ -179,7 +180,7 @@ const formatPlanName = (plan: string): string => plan.charAt(0).toUpperCase() + 
  */
 export function Subscription({ onOpenChange }: SubscriptionProps) {
   const { data: session } = useSession()
-  const betterAuthSubscription = useSubscription()
+  const { handleUpgrade } = useSubscriptionUpgrade()
 
   const {
     isLoading,
@@ -268,50 +269,15 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
     }
   }
 
-  const handleUpgrade = useCallback(
+  const handleUpgradeWithErrorHandling = useCallback(
     async (targetPlan: TargetPlan) => {
-      if (!session?.user?.id) return
-
-      const { subscriptionData } = useSubscriptionStore.getState()
-      const currentSubscriptionId = subscriptionData?.stripeSubscriptionId
-
-      let referenceId = session.user.id
-      if (subscription.isTeam && activeOrgId) {
-        referenceId = activeOrgId
-      }
-
-      const currentUrl = `${window.location.origin}${window.location.pathname}`
-
       try {
-        const upgradeParams = {
-          plan: targetPlan,
-          referenceId,
-          successUrl: currentUrl,
-          cancelUrl: currentUrl,
-          ...(targetPlan === 'team' && { seats: CONSTANTS.INITIAL_TEAM_SEATS }),
-        } as const
-
-        // Add subscriptionId for existing subscriptions to ensure proper plan switching
-        const finalParams = currentSubscriptionId
-          ? { ...upgradeParams, subscriptionId: currentSubscriptionId }
-          : upgradeParams
-
-        logger.info(
-          currentSubscriptionId ? 'Upgrading existing subscription' : 'Creating new subscription',
-          {
-            targetPlan,
-            currentSubscriptionId,
-            referenceId,
-          }
-        )
-
-        await betterAuthSubscription.upgrade(finalParams)
+        await handleUpgrade(targetPlan)
       } catch (error) {
-        logger.error('Failed to initiate subscription upgrade:', error)
-        alert('Failed to initiate upgrade. Please try again or contact support.')
+        alert(error instanceof Error ? error.message : 'Unknown error occurred')
       }
     },
-    [session?.user?.id, subscription.isTeam, activeOrgId, betterAuthSubscription]
+    [handleUpgrade]
   )
 
   const renderPlanCard = useCallback(
@@ -328,7 +294,7 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
               priceSubtext='/month'
               features={PRO_PLAN_FEATURES}
               buttonText={subscription.isFree ? 'Upgrade' : 'Upgrade to Pro'}
-              onButtonClick={() => handleUpgrade('pro')}
+              onButtonClick={() => handleUpgradeWithErrorHandling('pro')}
               isError={upgradeError === 'pro'}
               layout={layout}
             />
@@ -343,7 +309,7 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
               priceSubtext='/month'
               features={TEAM_PLAN_FEATURES}
               buttonText={subscription.isFree ? 'Upgrade' : 'Upgrade to Team'}
-              onButtonClick={() => handleUpgrade('team')}
+              onButtonClick={() => handleUpgradeWithErrorHandling('team')}
               isError={upgradeError === 'team'}
               layout={layout}
             />

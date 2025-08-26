@@ -78,14 +78,21 @@ export function getPerUserMinimumLimit(subscription: any): number {
     return env.PRO_TIER_COST_LIMIT || DEFAULT_PRO_TIER_COST_LIMIT
   }
   if (subscription.plan === 'team') {
-    // For team plans, return 0 as individual members don't have personal minimums
-    // Team usage is managed at the organization level with a pooled cap
-    // Individual member limits are not used in the team billing model
-    return 0
+    // For team plans, return the total pooled limit (seats * cost per seat)
+    // This becomes the user's individual limit representing their share of the team pool
+    return seats * (env.TEAM_TIER_COST_LIMIT || DEFAULT_TEAM_TIER_COST_LIMIT)
   }
   if (subscription.plan === 'enterprise') {
-    // Enterprise works like Team - pooled usage, no individual minimums
-    return 0
+    // For enterprise plans, return the total pooled limit (seats * cost per seat)
+    // This becomes the user's individual limit representing their share of the enterprise pool
+    let perSeatPrice = env.ENTERPRISE_TIER_COST_LIMIT || DEFAULT_ENTERPRISE_TIER_COST_LIMIT
+    if (subscription.metadata?.perSeatPrice) {
+      const parsed = Number.parseFloat(String(subscription.metadata.perSeatPrice))
+      if (parsed > 0 && !Number.isNaN(parsed)) {
+        perSeatPrice = parsed
+      }
+    }
+    return seats * perSeatPrice
   }
 
   return env.FREE_TIER_COST_LIMIT || DEFAULT_FREE_CREDITS

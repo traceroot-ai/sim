@@ -5,17 +5,13 @@ import {
   DEFAULT_PRO_TIER_COST_LIMIT,
   DEFAULT_TEAM_TIER_COST_LIMIT,
 } from '@/lib/billing/constants'
-import {
-  resetOrganizationBillingPeriod,
-  resetUserBillingPeriod,
-} from '@/lib/billing/core/billing-periods'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { getUserUsageData } from '@/lib/billing/core/usage'
 import { requireStripeClient } from '@/lib/billing/stripe-client'
 import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
-import { member, organization, subscription, user } from '@/db/schema'
+import { member, organization, subscription, user, userStats } from '@/db/schema'
 
 const logger = createLogger('Billing')
 
@@ -389,7 +385,22 @@ export async function processUserOverageBilling(userId: string): Promise<Billing
 
       // Still reset billing period even if no overage
       try {
-        await resetUserBillingPeriod(userId)
+        const currentStats = await db
+          .select({ currentPeriodCost: userStats.currentPeriodCost })
+          .from(userStats)
+          .where(eq(userStats.userId, userId))
+          .limit(1)
+
+        if (currentStats.length > 0) {
+          const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
+          await db
+            .update(userStats)
+            .set({
+              lastPeriodCost: currentPeriodCost,
+              currentPeriodCost: '0',
+            })
+            .where(eq(userStats.userId, userId))
+        }
       } catch (resetError) {
         logger.error('Failed to reset billing period', { userId, error: resetError })
       }
@@ -452,7 +463,22 @@ export async function processUserOverageBilling(userId: string): Promise<Billing
     // If billing was successful, reset the user's billing period
     if (result.success) {
       try {
-        await resetUserBillingPeriod(userId)
+        const currentStats = await db
+          .select({ currentPeriodCost: userStats.currentPeriodCost })
+          .from(userStats)
+          .where(eq(userStats.userId, userId))
+          .limit(1)
+
+        if (currentStats.length > 0) {
+          const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
+          await db
+            .update(userStats)
+            .set({
+              lastPeriodCost: currentPeriodCost,
+              currentPeriodCost: '0',
+            })
+            .where(eq(userStats.userId, userId))
+        }
         logger.info('Successfully reset billing period after charging user overage', { userId })
       } catch (resetError) {
         logger.error('Failed to reset billing period after successful overage charge', {
@@ -574,7 +600,24 @@ export async function processOrganizationOverageBilling(
 
       // Still reset billing period for all members
       try {
-        await resetOrganizationBillingPeriod(organizationId)
+        for (const memberRecord of members) {
+          const currentStats = await db
+            .select({ currentPeriodCost: userStats.currentPeriodCost })
+            .from(userStats)
+            .where(eq(userStats.userId, memberRecord.userId))
+            .limit(1)
+
+          if (currentStats.length > 0) {
+            const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
+            await db
+              .update(userStats)
+              .set({
+                lastPeriodCost: currentPeriodCost,
+                currentPeriodCost: '0',
+              })
+              .where(eq(userStats.userId, memberRecord.userId))
+          }
+        }
       } catch (resetError) {
         logger.error('Failed to reset organization billing period', {
           organizationId,
@@ -610,7 +653,24 @@ export async function processOrganizationOverageBilling(
     // If billing was successful, reset billing period for all organization members
     if (result.success) {
       try {
-        await resetOrganizationBillingPeriod(organizationId)
+        for (const memberRecord of members) {
+          const currentStats = await db
+            .select({ currentPeriodCost: userStats.currentPeriodCost })
+            .from(userStats)
+            .where(eq(userStats.userId, memberRecord.userId))
+            .limit(1)
+
+          if (currentStats.length > 0) {
+            const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
+            await db
+              .update(userStats)
+              .set({
+                lastPeriodCost: currentPeriodCost,
+                currentPeriodCost: '0',
+              })
+              .where(eq(userStats.userId, memberRecord.userId))
+          }
+        }
         logger.info('Successfully reset billing period for organization after overage billing', {
           organizationId,
           memberCount: members.length,
@@ -637,96 +697,6 @@ export async function processOrganizationOverageBilling(
   } catch (error) {
     logger.error('Failed to process organization overage billing', { organizationId, error })
     return { success: false, error: 'Failed to process organization overage billing' }
-  }
-}
-
-/**
- * Get users and organizations whose billing periods end today
- */
-export async function getUsersAndOrganizationsForOverageBilling(): Promise<{
-  users: string[]
-  organizations: string[]
-}> {
-  try {
-    const today = new Date()
-    today.setUTCHours(0, 0, 0, 0) // Start of today
-    const tomorrow = new Date(today)
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1) // Start of tomorrow
-
-    logger.info('Checking for subscriptions with billing periods ending today', {
-      today: today.toISOString(),
-      tomorrow: tomorrow.toISOString(),
-    })
-
-    // Get all active subscriptions (excluding free plans)
-    const activeSubscriptions = await db
-      .select()
-      .from(subscription)
-      .where(eq(subscription.status, 'active'))
-
-    const users: string[] = []
-    const organizations: string[] = []
-
-    for (const sub of activeSubscriptions) {
-      if (sub.plan === 'free') {
-        continue // Skip free plans
-      }
-
-      // Check if subscription period ends today (range-based, inclusive of day)
-      let shouldBillToday = false
-
-      if (sub.periodEnd) {
-        const periodEnd = new Date(sub.periodEnd)
-        const endsToday = periodEnd >= today && periodEnd < tomorrow
-
-        if (endsToday) {
-          shouldBillToday = true
-          logger.info('Subscription period ends today', {
-            referenceId: sub.referenceId,
-            plan: sub.plan,
-            periodEnd: sub.periodEnd,
-          })
-        }
-      }
-
-      if (shouldBillToday) {
-        // Check if referenceId is a user or organization
-        const userExists = await db
-          .select({ id: user.id })
-          .from(user)
-          .where(eq(user.id, sub.referenceId))
-          .limit(1)
-
-        if (userExists.length > 0) {
-          // It's a user subscription (pro plan)
-          users.push(sub.referenceId)
-        } else {
-          // Check if it's an organization
-          const orgExists = await db
-            .select({ id: organization.id })
-            .from(organization)
-            .where(eq(organization.id, sub.referenceId))
-            .limit(1)
-
-          if (orgExists.length > 0) {
-            // It's an organization subscription (team/enterprise)
-            organizations.push(sub.referenceId)
-          }
-        }
-      }
-    }
-
-    logger.info('Found entities for daily billing check', {
-      userCount: users.length,
-      organizationCount: organizations.length,
-      users,
-      organizations,
-    })
-
-    return { users, organizations }
-  } catch (error) {
-    logger.error('Failed to get entities for daily billing check', { error })
-    return { users: [], organizations: [] }
   }
 }
 
@@ -880,9 +850,26 @@ export async function getSimplifiedBillingSummary(
 
     // Individual billing summary
     const { basePrice } = getPlanPricing(plan, subscription)
-    const overageAmount = Math.max(0, usageData.currentUsage - basePrice)
-    const percentUsed =
-      usageData.limit > 0 ? Math.round((usageData.currentUsage / usageData.limit) * 100) : 0
+
+    // For team and enterprise plans, calculate total team usage instead of individual usage
+    let currentUsage = usageData.currentUsage
+    if ((isTeam || isEnterprise) && subscription?.referenceId) {
+      // Get all team members and sum their usage
+      const teamMembers = await db
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, subscription.referenceId))
+
+      let totalTeamUsage = 0
+      for (const teamMember of teamMembers) {
+        const memberUsageData = await getUserUsageData(teamMember.userId)
+        totalTeamUsage += memberUsageData.currentUsage
+      }
+      currentUsage = totalTeamUsage
+    }
+
+    const overageAmount = Math.max(0, currentUsage - basePrice)
+    const percentUsed = usageData.limit > 0 ? Math.round((currentUsage / usageData.limit) * 100) : 0
 
     // Calculate days remaining in billing period
     const daysRemaining = usageData.billingPeriodEnd
@@ -896,13 +883,13 @@ export async function getSimplifiedBillingSummary(
       type: 'individual',
       plan,
       basePrice,
-      currentUsage: usageData.currentUsage,
+      currentUsage: currentUsage,
       overageAmount,
       totalProjected: basePrice + overageAmount,
       usageLimit: usageData.limit,
       percentUsed,
       isWarning: percentUsed >= 80 && percentUsed < 100,
-      isExceeded: usageData.currentUsage >= usageData.limit,
+      isExceeded: currentUsage >= usageData.limit,
       daysRemaining,
       // Subscription details
       isPaid,
@@ -916,11 +903,11 @@ export async function getSimplifiedBillingSummary(
       periodEnd: subscription?.periodEnd || null,
       // Usage details
       usage: {
-        current: usageData.currentUsage,
+        current: currentUsage,
         limit: usageData.limit,
         percentUsed,
         isWarning: percentUsed >= 80 && percentUsed < 100,
-        isExceeded: usageData.currentUsage >= usageData.limit,
+        isExceeded: currentUsage >= usageData.limit,
         billingPeriodStart: usageData.billingPeriodStart,
         billingPeriodEnd: usageData.billingPeriodEnd,
         lastPeriodCost: usageData.lastPeriodCost,
@@ -972,112 +959,4 @@ function getDefaultBillingSummary(type: 'individual' | 'organization') {
       daysRemaining: 0,
     },
   }
-}
-
-/**
- * Process daily billing check for users and organizations with periods ending today
- */
-export async function processDailyBillingCheck(): Promise<{
-  success: boolean
-  processedUsers: number
-  processedOrganizations: number
-  totalChargedAmount: number
-  errors: string[]
-}> {
-  try {
-    logger.info('Starting daily billing check process')
-
-    const { users, organizations } = await getUsersAndOrganizationsForOverageBilling()
-
-    let processedUsers = 0
-    let processedOrganizations = 0
-    let totalChargedAmount = 0
-    const errors: string[] = []
-
-    // Process individual users (pro plans)
-    for (const userId of users) {
-      try {
-        const result = await processUserOverageBilling(userId)
-        if (result.success) {
-          processedUsers++
-          totalChargedAmount += result.chargedAmount || 0
-          logger.info('Successfully processed user overage billing', {
-            userId,
-            chargedAmount: result.chargedAmount,
-          })
-        } else {
-          errors.push(`User ${userId}: ${result.error}`)
-          logger.error('Failed to process user overage billing', { userId, error: result.error })
-        }
-      } catch (error) {
-        const errorMsg = `User ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        errors.push(errorMsg)
-        logger.error('Exception during user overage billing', { userId, error })
-      }
-    }
-
-    // Process organizations (team/enterprise plans)
-    for (const organizationId of organizations) {
-      try {
-        const result = await processOrganizationOverageBilling(organizationId)
-        if (result.success) {
-          processedOrganizations++
-          totalChargedAmount += result.chargedAmount || 0
-          logger.info('Successfully processed organization overage billing', {
-            organizationId,
-            chargedAmount: result.chargedAmount,
-          })
-        } else {
-          errors.push(`Organization ${organizationId}: ${result.error}`)
-          logger.error('Failed to process organization overage billing', {
-            organizationId,
-            error: result.error,
-          })
-        }
-      } catch (error) {
-        const errorMsg = `Organization ${organizationId}: ${error instanceof Error ? error.message : 'Unknown error'}`
-        errors.push(errorMsg)
-        logger.error('Exception during organization overage billing', { organizationId, error })
-      }
-    }
-
-    logger.info('Completed daily billing check process', {
-      processedUsers,
-      processedOrganizations,
-      totalChargedAmount,
-      errorCount: errors.length,
-    })
-
-    return {
-      success: errors.length === 0,
-      processedUsers,
-      processedOrganizations,
-      totalChargedAmount,
-      errors,
-    }
-  } catch (error) {
-    logger.error('Fatal error during daily billing check process', { error })
-    return {
-      success: false,
-      processedUsers: 0,
-      processedOrganizations: 0,
-      totalChargedAmount: 0,
-      errors: [error instanceof Error ? error.message : 'Fatal daily billing check process error'],
-    }
-  }
-}
-
-/**
- * Legacy function for backward compatibility - now redirects to daily billing check
- * @deprecated Use processDailyBillingCheck instead
- */
-export async function processMonthlyOverageBilling(): Promise<{
-  success: boolean
-  processedUsers: number
-  processedOrganizations: number
-  totalChargedAmount: number
-  errors: string[]
-}> {
-  logger.warn('processMonthlyOverageBilling is deprecated, use processDailyBillingCheck instead')
-  return processDailyBillingCheck()
 }

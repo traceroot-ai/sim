@@ -125,11 +125,42 @@ export function TeamManagement() {
 
   const handleCreateOrganization = useCallback(async () => {
     if (!session?.user || !orgName.trim()) return
-    await createOrganization(orgName.trim(), orgSlug.trim())
-    setCreateOrgDialogOpen(false)
-    setOrgName('')
-    setOrgSlug('')
-  }, [session?.user?.id, orgName, orgSlug])
+
+    // Use our custom organization API instead of Better Auth plugin
+    // This ensures consistency with our centralized upgrade flow
+    try {
+      const response = await fetch('/api/organizations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: orgName.trim(),
+          slug: orgSlug.trim(),
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to create organization: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success || !result.organizationId) {
+        throw new Error('Failed to create organization')
+      }
+
+      // Refresh organization data
+      await loadData()
+
+      setCreateOrgDialogOpen(false)
+      setOrgName('')
+      setOrgSlug('')
+    } catch (error) {
+      logger.error('Failed to create organization', error)
+      // Error will be shown via the error state from the store
+    }
+  }, [session?.user?.id, orgName, orgSlug, loadData])
 
   const handleInviteMember = useCallback(async () => {
     if (!session?.user || !activeOrgId || !inviteEmail.trim()) return

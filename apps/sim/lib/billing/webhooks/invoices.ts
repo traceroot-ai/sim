@@ -1,12 +1,8 @@
 import { eq } from 'drizzle-orm'
 import type Stripe from 'stripe'
-import {
-  resetOrganizationBillingPeriod,
-  resetUserBillingPeriod,
-} from '@/lib/billing/core/billing-periods'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
-import { subscription as subscriptionTable } from '@/db/schema'
+import { member, subscription as subscriptionTable, userStats } from '@/db/schema'
 
 const logger = createLogger('StripeInvoiceWebhooks')
 
@@ -68,14 +64,56 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
       const sub = records[0]
 
       if (sub.plan === 'team' || sub.plan === 'enterprise') {
-        await resetOrganizationBillingPeriod(sub.referenceId)
+        // Reset billing period for all organization members
+        const members = await db
+          .select({ userId: member.userId })
+          .from(member)
+          .where(eq(member.organizationId, sub.referenceId))
+
+        for (const memberRecord of members) {
+          const currentStats = await db
+            .select({ currentPeriodCost: userStats.currentPeriodCost })
+            .from(userStats)
+            .where(eq(userStats.userId, memberRecord.userId))
+            .limit(1)
+
+          if (currentStats.length > 0) {
+            const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
+            await db
+              .update(userStats)
+              .set({
+                lastPeriodCost: currentPeriodCost,
+                currentPeriodCost: '0',
+              })
+              .where(eq(userStats.userId, memberRecord.userId))
+          }
+        }
+
         logger.info('Reset organization billing period on subscription invoice payment', {
           invoiceId: invoice.id,
           organizationId: sub.referenceId,
           plan: sub.plan,
+          memberCount: members.length,
         })
       } else {
-        await resetUserBillingPeriod(sub.referenceId)
+        // Reset billing period for individual user
+        const currentStats = await db
+          .select({ currentPeriodCost: userStats.currentPeriodCost })
+          .from(userStats)
+          .where(eq(userStats.userId, sub.referenceId))
+          .limit(1)
+
+        if (currentStats.length > 0) {
+          const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
+          await db
+            .update(userStats)
+            .set({
+              lastPeriodCost: currentPeriodCost,
+              currentPeriodCost: '0',
+            })
+            .where(eq(userStats.userId, sub.referenceId))
+        }
+
         logger.info('Reset user billing period on subscription invoice payment', {
           invoiceId: invoice.id,
           userId: sub.referenceId,
@@ -149,11 +187,13 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
 /**
  * Handle invoice finalized webhook
  * This is triggered when a usage billing invoice is finalized and ready for payment
+ * For subscription renewals, this is where we calculate and create overage charges
  */
 export async function handleInvoiceFinalized(event: Stripe.Event) {
   try {
     const invoice = event.data.object as Stripe.Invoice
-    // Do not reset usage on finalized; wait for payment success to avoid granting new period during dunning
+
+    // Handle overage billing invoices
     if (invoice.metadata?.type === 'overage_billing') {
       const customerId = invoice.customer as string
       const invoiceAmount = invoice.amount_due / 100
@@ -166,9 +206,90 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
       })
       return
     }
-    logger.info('Ignoring subscription invoice finalization; will act on payment_succeeded', {
+
+    // Handle subscription renewal invoices - calculate overages for the ending period
+    if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {
+      const stripeSubscriptionId = String(invoice.subscription)
+      const records = await db
+        .select()
+        .from(subscriptionTable)
+        .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscriptionId))
+        .limit(1)
+
+      if (records.length === 0) {
+        logger.warn('No matching internal subscription for finalized subscription invoice', {
+          invoiceId: invoice.id,
+          stripeSubscriptionId,
+        })
+        return
+      }
+
+      const sub = records[0]
+
+      // Calculate and create overage charges before the new period begins
+      logger.info('Processing overage billing for subscription cycle', {
+        invoiceId: invoice.id,
+        subscriptionId: sub.id,
+        referenceId: sub.referenceId,
+        plan: sub.plan,
+      })
+
+      try {
+        if (sub.plan === 'team' || sub.plan === 'enterprise') {
+          // Organization overage billing
+          const { processOrganizationOverageBilling } = await import('@/lib/billing/core/billing')
+          const result = await processOrganizationOverageBilling(sub.referenceId)
+
+          if (result.success) {
+            logger.info('Successfully processed organization overage billing', {
+              invoiceId: invoice.id,
+              organizationId: sub.referenceId,
+              chargedAmount: result.chargedAmount,
+            })
+          } else {
+            logger.error('Failed to process organization overage billing', {
+              invoiceId: invoice.id,
+              organizationId: sub.referenceId,
+              error: result.error,
+            })
+          }
+        } else {
+          // Individual user overage billing
+          const { processUserOverageBilling } = await import('@/lib/billing/core/billing')
+          const result = await processUserOverageBilling(sub.referenceId)
+
+          if (result.success) {
+            logger.info('Successfully processed user overage billing', {
+              invoiceId: invoice.id,
+              userId: sub.referenceId,
+              chargedAmount: result.chargedAmount,
+            })
+          } else {
+            logger.error('Failed to process user overage billing', {
+              invoiceId: invoice.id,
+              userId: sub.referenceId,
+              error: result.error,
+            })
+          }
+        }
+      } catch (overageBillingError) {
+        logger.error('Exception during overage billing processing', {
+          invoiceId: invoice.id,
+          subscriptionId: sub.id,
+          referenceId: sub.referenceId,
+          plan: sub.plan,
+          error: overageBillingError,
+        })
+        // Don't throw - let the subscription renewal proceed even if overage billing fails
+      }
+
+      return
+    }
+
+    logger.info('Ignoring non-subscription-cycle invoice finalization', {
       invoiceId: invoice.id,
       billingReason: invoice.billing_reason,
+      hasSubscription: !!invoice.subscription,
     })
   } catch (error) {
     logger.error('Failed to handle invoice finalized', {
@@ -176,27 +297,5 @@ export async function handleInvoiceFinalized(event: Stripe.Event) {
       error,
     })
     throw error // Re-throw to signal webhook failure
-  }
-}
-
-/**
- * Main webhook handler for all invoice-related events
- */
-export async function handleInvoiceWebhook(event: Stripe.Event) {
-  switch (event.type) {
-    case 'invoice.payment_succeeded':
-      await handleInvoicePaymentSucceeded(event)
-      break
-
-    case 'invoice.payment_failed':
-      await handleInvoicePaymentFailed(event)
-      break
-
-    case 'invoice.finalized':
-      await handleInvoiceFinalized(event)
-      break
-
-    default:
-      logger.info('Unhandled invoice webhook event', { eventType: event.type })
   }
 }

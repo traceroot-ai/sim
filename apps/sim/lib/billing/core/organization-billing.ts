@@ -134,7 +134,8 @@ export async function getOrganizationBillingData(
     const { basePrice: pricePerSeat } = getPlanPricing(subscription.plan, subscription)
 
     // Use Stripe subscription seats as source of truth
-    const licensedSeats = subscription.seats || 1 // Default to 1 if not set
+    // Ensure we always have at least 1 seat (protect against 0 or falsy values)
+    const licensedSeats = Math.max(subscription.seats || 1, 1)
 
     // Validate seat capacity - warn if members exceed licensed seats
     if (members.length > licensedSeats) {
@@ -168,7 +169,7 @@ export async function getOrganizationBillingData(
       organizationName: organizationData.name || '',
       subscriptionPlan: subscription.plan,
       subscriptionStatus: subscription.status || 'inactive',
-      totalSeats: subscription.seats || 1,
+      totalSeats: Math.max(subscription.seats || 1, 1),
       usedSeats: members.length,
       seatsCount: licensedSeats,
       totalCurrentUsage: roundCurrency(totalCurrentUsage),
@@ -212,7 +213,7 @@ export async function updateOrganizationUsageLimit(
 
     // Calculate minimum based on seats
     const { basePrice } = getPlanPricing(subscription.plan, subscription)
-    const minimumLimit = (subscription.seats || 1) * basePrice
+    const minimumLimit = Math.max(subscription.seats || 1, 1) * basePrice
 
     // Validate new limit is not below minimum
     if (newLimit < minimumLimit) {
