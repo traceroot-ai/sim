@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { client, useSession, useSubscription } from '@/lib/auth-client'
 import { createLogger } from '@/lib/logs/console/logger'
 import { useOrganizationStore } from '@/stores/organization'
-import { useSubscriptionStore } from '@/stores/subscription/store'
 
 const logger = createLogger('SubscriptionUpgrade')
 
@@ -22,20 +21,29 @@ export function useSubscriptionUpgrade() {
 
   const handleUpgrade = useCallback(
     async (targetPlan: TargetPlan) => {
-      if (!session?.user?.id) {
+      const userId = session?.user?.id
+      if (!userId) {
         throw new Error('User not authenticated')
       }
 
-      const { subscriptionData } = useSubscriptionStore.getState()
-      const currentSubscriptionId = subscriptionData?.stripeSubscriptionId
+      let currentSubscriptionId: string | undefined
+      try {
+        const listResult = await client.subscription.list()
+        const activePersonalSub = listResult.data?.find(
+          (sub: any) => sub.status === 'active' && sub.referenceId === userId
+        )
+        currentSubscriptionId = activePersonalSub?.id
+      } catch (_e) {
+        currentSubscriptionId = undefined
+      }
 
-      let referenceId = session.user.id
+      let referenceId = userId
 
       // For team plans, create organization first and use its ID as referenceId
       if (targetPlan === 'team') {
         try {
           logger.info('Creating organization for team plan upgrade', {
-            userId: session.user.id,
+            userId,
           })
 
           const response = await fetch('/api/organizations', {
@@ -69,7 +77,7 @@ export function useSubscriptionUpgrade() {
 
             logger.info('Set organization as active and updated referenceId', {
               organizationId: result.organizationId,
-              oldReferenceId: session.user.id,
+              oldReferenceId: userId,
               newReferenceId: referenceId,
             })
           } catch (error) {
@@ -78,6 +86,22 @@ export function useSubscriptionUpgrade() {
               error: error instanceof Error ? error.message : 'Unknown error',
             })
             // Continue with upgrade even if setting active fails
+          }
+
+          if (currentSubscriptionId) {
+            const transferResponse = await fetch(
+              `/api/users/me/subscription/${currentSubscriptionId}/transfer`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ organizationId: referenceId }),
+              }
+            )
+
+            if (!transferResponse.ok) {
+              const text = await transferResponse.text()
+              throw new Error(text || 'Failed to transfer subscription to organization')
+            }
           }
         } catch (error) {
           logger.error('Failed to create organization for team plan', error)
