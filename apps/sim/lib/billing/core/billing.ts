@@ -55,16 +55,15 @@ export function getPlanPricing(
   plan: string,
   subscription?: any
 ): {
-  basePrice: number // What they pay upfront via Stripe subscription
-  minimum: number // Minimum they're guaranteed to pay
+  basePrice: number // What they pay upfront via Stripe subscription (per seat for team/enterprise)
 } {
   switch (plan) {
     case 'free':
-      return { basePrice: 0, minimum: 0 } // Free plan has no charges
+      return { basePrice: 0 } // Free plan has no charges
     case 'pro':
-      return { basePrice: getProTierLimit(), minimum: getProTierLimit() }
+      return { basePrice: getProTierLimit() }
     case 'team':
-      return { basePrice: getTeamTierLimitPerSeat(), minimum: getTeamTierLimitPerSeat() }
+      return { basePrice: getTeamTierLimitPerSeat() }
     case 'enterprise':
       // Enterprise uses per-seat pricing like Team plans
       // Custom per-seat price can be set in metadata
@@ -78,16 +77,13 @@ export function getPlanPricing(
           ? Number.parseFloat(String(metadata.perSeatPrice))
           : undefined
         if (perSeatPrice && perSeatPrice > 0 && !Number.isNaN(perSeatPrice)) {
-          return { basePrice: perSeatPrice, minimum: perSeatPrice }
+          return { basePrice: perSeatPrice }
         }
       }
       // Default enterprise per-seat pricing
-      return {
-        basePrice: getEnterpriseTierLimitPerSeat(),
-        minimum: getEnterpriseTierLimitPerSeat(),
-      }
+      return { basePrice: getEnterpriseTierLimitPerSeat() }
     default:
-      return { basePrice: 0, minimum: 0 }
+      return { basePrice: 0 }
   }
 }
 
