@@ -86,12 +86,11 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const context = searchParams.get('context') || 'user'
-    const userId = searchParams.get('userId') || session.user.id
-    const organizationId = searchParams.get('organizationId')
-
-    const { limit } = await request.json()
+    const body = await request.json()
+    const limit = body?.limit
+    const context = body?.context || 'user'
+    const organizationId = body?.organizationId
+    const userId = session.user.id
 
     if (typeof limit !== 'number' || limit < 0) {
       return NextResponse.json(
@@ -100,12 +99,15 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    if (!['user', 'organization'].includes(context)) {
+      return NextResponse.json(
+        { error: 'Invalid context. Must be "user" or "organization"' },
+        { status: 400 }
+      )
+    }
+
     if (context === 'user') {
       // Update user's own usage limit
-      if (userId !== session.user.id) {
-        return NextResponse.json({ error: "Cannot update other users' limits" }, { status: 403 })
-      }
-
       await updateUserUsageLimit(userId, limit)
     } else if (context === 'organization') {
       // context === 'organization'

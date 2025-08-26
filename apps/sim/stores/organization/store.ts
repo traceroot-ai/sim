@@ -167,44 +167,6 @@ export const useOrganizationStore = create<OrganizationStore>()(
               lastSubscriptionFetched: Date.now(),
             })
           } else {
-            // Check billing endpoint for enterprise subscriptions
-            const { hasEnterprisePlan } = get()
-            if (hasEnterprisePlan) {
-              try {
-                const billingResponse = await fetch('/api/billing?context=user')
-                if (billingResponse.ok) {
-                  const billingData = await billingResponse.json()
-                  if (
-                    billingData.success &&
-                    billingData.data.isEnterprise &&
-                    billingData.data.status
-                  ) {
-                    const enterpriseSubscription = {
-                      id: `subscription_${Date.now()}`,
-                      plan: billingData.data.plan,
-                      status: billingData.data.status,
-                      seats: billingData.data.seats,
-                      referenceId: billingData.data.organizationId || 'unknown',
-                    }
-                    logger.info('Found enterprise subscription from billing data', {
-                      plan: enterpriseSubscription.plan,
-                      seats: enterpriseSubscription.seats,
-                    })
-                    set({
-                      subscriptionData: enterpriseSubscription,
-                      isLoadingSubscription: false,
-                      lastSubscriptionFetched: Date.now(),
-                    })
-                    return
-                  }
-                }
-              } catch (err) {
-                logger.error('Error fetching enterprise subscription from billing endpoint', {
-                  error: err,
-                })
-              }
-            }
-
             logger.warn('No active subscription found for organization', { orgId })
             set({
               subscriptionData: null,
