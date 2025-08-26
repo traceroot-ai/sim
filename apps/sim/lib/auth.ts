@@ -1245,36 +1245,11 @@ export const auth = betterAuth({
                 })
 
                 try {
-                  // Get fresh subscription data from the database to avoid race conditions
-                  const freshSubscription = await db
-                    .select()
-                    .from(schema.subscription)
-                    .where(eq(schema.subscription.id, subscription.id))
-                    .limit(1)
-
-                  if (freshSubscription.length > 0) {
-                    const updatedSubscription = {
-                      id: freshSubscription[0].id,
-                      plan: freshSubscription[0].plan,
-                      referenceId: freshSubscription[0].referenceId,
-                      status: freshSubscription[0].status || 'active',
-                      seats: freshSubscription[0].seats || undefined,
-                    }
-
-                    logger.info('[onSubscriptionUpdate] Using fresh subscription data', {
-                      subscriptionId: updatedSubscription.id,
-                      plan: updatedSubscription.plan,
-                      referenceId: updatedSubscription.referenceId,
-                    })
-
-                    await syncSubscriptionUsageLimits(updatedSubscription)
-                  } else {
-                    // Fallback to original subscription data
-                    await syncSubscriptionUsageLimits(subscription)
-                  }
+                  await syncSubscriptionUsageLimits(subscription)
                 } catch (error) {
-                  logger.error('[onSubscriptionUpdate] Failed to handle subscription lifecycle', {
+                  logger.error('[onSubscriptionUpdate] Failed to sync usage limits', {
                     subscriptionId: subscription.id,
+                    referenceId: subscription.referenceId,
                     error,
                   })
                 }
