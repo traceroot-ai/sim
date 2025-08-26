@@ -3,7 +3,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DEFAULT_TEAM_TIER_COST_LIMIT } from '@/lib/billing/constants'
 import { checkEnterprisePlan } from '@/lib/billing/subscriptions/utils'
+import { env } from '@/lib/env'
 
 type Subscription = {
   id: string
@@ -128,7 +130,11 @@ export function TeamSeatsOverview({
           <div className='flex items-center justify-between border-t pt-2 text-sm'>
             <span>Seat Cost:</span>
             <span className='font-semibold'>
-              ${((subscriptionData.seats || 0) * 40).toFixed(2)}
+              $
+              {(
+                (subscriptionData.seats || 0) *
+                (env.TEAM_TIER_COST_LIMIT ?? DEFAULT_TEAM_TIER_COST_LIMIT)
+              ).toFixed(2)}
             </span>
           </div>
           <div className='mt-2 text-muted-foreground text-xs'>

@@ -10,6 +10,7 @@ import {
   TabsTrigger,
 } from '@/components/ui'
 import { useSession } from '@/lib/auth-client'
+import { DEFAULT_TEAM_TIER_COST_LIMIT } from '@/lib/billing/constants'
 import { checkEnterprisePlan } from '@/lib/billing/subscriptions/utils'
 import { env } from '@/lib/env'
 import { createLogger } from '@/lib/logs/console/logger'
@@ -430,7 +431,7 @@ export function TeamManagement() {
         open={isAddSeatDialogOpen}
         onOpenChange={setIsAddSeatDialogOpen}
         title='Add Team Seats'
-        description={`Each seat costs $${env.TEAM_TIER_COST_LIMIT}/month and provides $${env.TEAM_TIER_COST_LIMIT} in monthly inference credits. Adjust the number of licensed seats for your team.`}
+        description={`Each seat costs $${env.TEAM_TIER_COST_LIMIT ?? DEFAULT_TEAM_TIER_COST_LIMIT}/month and provides $${env.TEAM_TIER_COST_LIMIT ?? DEFAULT_TEAM_TIER_COST_LIMIT} in monthly inference credits. Adjust the number of licensed seats for your team.`}
         currentSeats={subscriptionData?.seats || 1}
         initialSeats={newSeatCount}
         isLoading={isUpdatingSeats}
@@ -440,6 +441,7 @@ export function TeamManagement() {
         }}
         confirmButtonText='Update Seats'
         showCostBreakdown={true}
+        isCancelledAtPeriodEnd={subscriptionData?.cancelAtPeriodEnd}
       />
     </div>
   )
