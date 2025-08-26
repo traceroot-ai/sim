@@ -106,6 +106,10 @@ export function OrganizationUsageCap({ hasAdminAccess }: OrganizationUsageCapPro
       // Reload billing data to reflect changes
       await loadOrganizationBillingData(activeOrg.id)
 
+      // Also refresh the subscription store so the usage indicator updates
+      const { refresh } = useSubscriptionStore.getState()
+      await refresh()
+
       logger.info('Successfully updated organization usage cap', {
         organizationId: activeOrg.id,
         newLimit,

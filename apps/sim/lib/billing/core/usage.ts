@@ -1,11 +1,11 @@
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { DEFAULT_FREE_CREDITS } from '@/lib/billing/constants'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { canEditUsageLimit, getPerUserMinimumLimit } from '@/lib/billing/subscriptions/utils'
 import type { BillingData, UsageData, UsageLimitInfo } from '@/lib/billing/types'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
-import { member, user, userStats } from '@/db/schema'
+import { member, organization, user, userStats } from '@/db/schema'
 
 const logger = createLogger('UsageManagement')
 
@@ -37,33 +37,47 @@ export async function handleNewUser(userId: string): Promise<void> {
  */
 export async function getUserUsageData(userId: string): Promise<UsageData> {
   try {
-    const userStatsData = await db
-      .select()
-      .from(userStats)
-      .where(eq(userStats.userId, userId))
-      .limit(1)
+    const [userStatsData, subscription] = await Promise.all([
+      db.select().from(userStats).where(eq(userStats.userId, userId)).limit(1),
+      getHighestPrioritySubscription(userId),
+    ])
 
     if (userStatsData.length === 0) {
-      // Initialize user stats if they don't exist
-      await initializeUserUsageLimit(userId)
-      return {
-        currentUsage: 0,
-        limit: DEFAULT_FREE_CREDITS,
-        percentUsed: 0,
-        isWarning: false,
-        isExceeded: false,
-        billingPeriodStart: null,
-        billingPeriodEnd: null,
-        lastPeriodCost: 0,
-      }
+      throw new Error(`User stats not found for userId: ${userId}`)
     }
 
     const stats = userStatsData[0]
-    const subscription = await getHighestPrioritySubscription(userId)
     const currentUsage = Number.parseFloat(
       stats.currentPeriodCost?.toString() ?? stats.totalCost.toString()
     )
-    const limit = Number.parseFloat(stats.currentUsageLimit)
+
+    // Determine usage limit based on plan type
+    let limit: number
+
+    if (!subscription || subscription.plan === 'free' || subscription.plan === 'pro') {
+      // Free/Pro: Use individual user limit from userStats
+      limit = stats.currentUsageLimit
+        ? Number.parseFloat(stats.currentUsageLimit)
+        : DEFAULT_FREE_CREDITS
+    } else {
+      // Team/Enterprise: Use organization limit (single source of truth)
+      const orgData = await db
+        .select({ orgUsageLimit: organization.orgUsageLimit })
+        .from(organization)
+        .where(eq(organization.id, subscription.referenceId))
+        .limit(1)
+
+      if (orgData.length > 0 && orgData[0].orgUsageLimit) {
+        // Use the org's configured limit
+        limit = Number.parseFloat(orgData[0].orgUsageLimit)
+      } else {
+        // If org hasn't set a custom limit, use the minimum (seats × cost per seat)
+        const { getPlanPricing } = await import('@/lib/billing/core/billing')
+        const { basePrice } = getPlanPricing(subscription.plan, subscription)
+        limit = (subscription.seats || 1) * basePrice
+      }
+    }
+
     const percentUsed = limit > 0 ? Math.round((currentUsage / limit) * 100) : 0
     const isWarning = percentUsed >= 80
     const isExceeded = currentUsage >= limit
@@ -94,54 +108,52 @@ export async function getUserUsageData(userId: string): Promise<UsageData> {
  */
 export async function getUserUsageLimitInfo(userId: string): Promise<UsageLimitInfo> {
   try {
-    const subscription = await getHighestPrioritySubscription(userId)
-
-    // For team plans, check if user is owner/admin to determine if they can edit their own limit
-    let canEdit = canEditUsageLimit(subscription)
-
-    if (subscription?.plan === 'team') {
-      // For team plans, the subscription referenceId should be the organization ID
-      // Check user's role in that organization
-      const orgMemberRecord = await db
-        .select({ role: member.role })
-        .from(member)
-        .where(and(eq(member.userId, userId), eq(member.organizationId, subscription.referenceId)))
-        .limit(1)
-
-      if (orgMemberRecord.length > 0) {
-        const userRole = orgMemberRecord[0].role
-        // Team owners and admins can edit their own usage limits
-        // Regular team members cannot edit their own limits
-        canEdit = canEdit && ['owner', 'admin'].includes(userRole)
-      } else {
-        // User is not a member of the organization, should not be able to edit
-        canEdit = false
-      }
-    }
-
-    // Use per-user minimums derived from plan/env/metadata
-    const minimumLimit = getPerUserMinimumLimit(subscription)
-
-    const userStatsRecord = await db
-      .select()
-      .from(userStats)
-      .where(eq(userStats.userId, userId))
-      .limit(1)
+    const [subscription, userStatsRecord] = await Promise.all([
+      getHighestPrioritySubscription(userId),
+      db.select().from(userStats).where(eq(userStats.userId, userId)).limit(1),
+    ])
 
     if (userStatsRecord.length === 0) {
-      await initializeUserUsageLimit(userId)
-      return {
-        currentLimit: DEFAULT_FREE_CREDITS,
-        canEdit: false,
-        minimumLimit: DEFAULT_FREE_CREDITS,
-        plan: 'free',
-        updatedAt: null,
-      }
+      throw new Error(`User stats not found for userId: ${userId}`)
     }
 
     const stats = userStatsRecord[0]
+
+    // Determine limits based on plan type
+    let currentLimit: number
+    let minimumLimit: number
+    let canEdit: boolean
+
+    if (!subscription || subscription.plan === 'free' || subscription.plan === 'pro') {
+      // Free/Pro: Use individual limits
+      currentLimit = stats.currentUsageLimit
+        ? Number.parseFloat(stats.currentUsageLimit)
+        : DEFAULT_FREE_CREDITS
+      minimumLimit = getPerUserMinimumLimit(subscription)
+      canEdit = canEditUsageLimit(subscription)
+    } else {
+      // Team/Enterprise: Use organization limits (users cannot edit)
+      const orgData = await db
+        .select({ orgUsageLimit: organization.orgUsageLimit })
+        .from(organization)
+        .where(eq(organization.id, subscription.referenceId))
+        .limit(1)
+
+      if (orgData.length > 0 && orgData[0].orgUsageLimit) {
+        currentLimit = Number.parseFloat(orgData[0].orgUsageLimit)
+        minimumLimit = currentLimit // For org plans, current is minimum
+      } else {
+        // If org hasn't set limit, use calculated minimum
+        const { getPlanPricing } = await import('@/lib/billing/core/billing')
+        const { basePrice } = getPlanPricing(subscription.plan, subscription)
+        currentLimit = (subscription.seats || 1) * basePrice
+        minimumLimit = currentLimit
+      }
+      canEdit = false // Team/enterprise members cannot edit limits
+    }
+
     return {
-      currentLimit: Number.parseFloat(stats.currentUsageLimit),
+      currentLimit,
       canEdit,
       minimumLimit,
       plan: subscription?.plan || 'free',
@@ -157,31 +169,36 @@ export async function getUserUsageLimitInfo(userId: string): Promise<UsageLimitI
  * Initialize usage limits for a new user
  */
 export async function initializeUserUsageLimit(userId: string): Promise<void> {
-  try {
-    // Check if user already has usage stats
-    const existingStats = await db
-      .select()
-      .from(userStats)
-      .where(eq(userStats.userId, userId))
-      .limit(1)
+  // Check if user already has usage stats
+  const existingStats = await db
+    .select()
+    .from(userStats)
+    .where(eq(userStats.userId, userId))
+    .limit(1)
 
-    if (existingStats.length > 0) {
-      return // User already has usage stats, don't override
-    }
-
-    // Create initial usage stats with default free credits limit
-    await db.insert(userStats).values({
-      id: crypto.randomUUID(),
-      userId,
-      currentUsageLimit: DEFAULT_FREE_CREDITS.toString(), // Default free credits for new users
-      usageLimitUpdatedAt: new Date(),
-    })
-
-    logger.info('Initialized usage limit for new user', { userId, limit: DEFAULT_FREE_CREDITS })
-  } catch (error) {
-    logger.error('Failed to initialize usage limit', { userId, error })
-    throw error
+  if (existingStats.length > 0) {
+    return // User already has usage stats
   }
+
+  // Check user's subscription to determine initial limit
+  const subscription = await getHighestPrioritySubscription(userId)
+  const isTeamOrEnterprise =
+    subscription && (subscription.plan === 'team' || subscription.plan === 'enterprise')
+
+  // Create initial usage stats
+  await db.insert(userStats).values({
+    id: crypto.randomUUID(),
+    userId,
+    // Team/enterprise: null (use org limit), Free/Pro: individual limit
+    currentUsageLimit: isTeamOrEnterprise ? null : DEFAULT_FREE_CREDITS.toString(),
+    usageLimitUpdatedAt: new Date(),
+  })
+
+  logger.info('Initialized user stats', {
+    userId,
+    plan: subscription?.plan || 'free',
+    hasIndividualLimit: !isTeamOrEnterprise,
+  })
 }
 
 /**
@@ -195,33 +212,16 @@ export async function updateUserUsageLimit(
   try {
     const subscription = await getHighestPrioritySubscription(userId)
 
-    // Check if user can edit limits
-    let canEdit = canEditUsageLimit(subscription)
-
-    if (subscription?.plan === 'team') {
-      // For team plans, the subscription referenceId should be the organization ID
-      // Check user's role in that organization
-      const orgMemberRecord = await db
-        .select({ role: member.role })
-        .from(member)
-        .where(and(eq(member.userId, userId), eq(member.organizationId, subscription.referenceId)))
-        .limit(1)
-
-      if (orgMemberRecord.length > 0) {
-        const userRole = orgMemberRecord[0].role
-        // Team owners and admins can edit their own usage limits
-        // Regular team members cannot edit their own limits
-        canEdit = canEdit && ['owner', 'admin'].includes(userRole)
-      } else {
-        // User is not a member of the organization, should not be able to edit
-        canEdit = false
+    // Team/enterprise users don't have individual limits
+    if (subscription && (subscription.plan === 'team' || subscription.plan === 'enterprise')) {
+      return {
+        success: false,
+        error: 'Team and enterprise members use organization limits',
       }
     }
 
-    if (!canEdit) {
-      if (subscription?.plan === 'team') {
-        return { success: false, error: 'Only team owners and admins can edit usage limits' }
-      }
+    // Only pro users can edit limits (free users cannot)
+    if (!subscription || subscription.plan === 'free') {
       return { success: false, error: 'Free plan users cannot edit usage limits' }
     }
 
@@ -288,27 +288,53 @@ export async function updateUserUsageLimit(
 }
 
 /**
- * Get usage limit for a user (simple version)
+ * Get usage limit for a user (used by checkUsageStatus for server-side checks)
+ * Free/Pro: Individual user limit from userStats
+ * Team/Enterprise: Organization limit
  */
 export async function getUserUsageLimit(userId: string): Promise<number> {
-  try {
+  const subscription = await getHighestPrioritySubscription(userId)
+
+  if (!subscription || subscription.plan === 'free' || subscription.plan === 'pro') {
+    // Free/Pro: Use individual limit from userStats
     const userStatsQuery = await db
-      .select()
+      .select({ currentUsageLimit: userStats.currentUsageLimit })
       .from(userStats)
       .where(eq(userStats.userId, userId))
       .limit(1)
 
     if (userStatsQuery.length === 0) {
-      // User doesn't have stats yet, initialize and return default
-      await initializeUserUsageLimit(userId)
-      return DEFAULT_FREE_CREDITS // Default free plan limit
+      throw new Error(`User stats not found for userId: ${userId}`)
+    }
+
+    // Individual limits should never be null for free/pro users
+    if (!userStatsQuery[0].currentUsageLimit) {
+      throw new Error(
+        `Invalid null usage limit for ${subscription?.plan || 'free'} user: ${userId}`
+      )
     }
 
     return Number.parseFloat(userStatsQuery[0].currentUsageLimit)
-  } catch (error) {
-    logger.error('Failed to get user usage limit', { userId, error })
-    return 5 // Fallback to safe default
   }
+  // Team/Enterprise: Use organization limit
+  const orgData = await db
+    .select({ orgUsageLimit: organization.orgUsageLimit })
+    .from(organization)
+    .where(eq(organization.id, subscription.referenceId))
+    .limit(1)
+
+  if (orgData.length === 0) {
+    throw new Error(`Organization not found: ${subscription.referenceId}`)
+  }
+
+  if (orgData[0].orgUsageLimit) {
+    return Number.parseFloat(orgData[0].orgUsageLimit)
+  }
+
+  // If org hasn't set a custom limit, use minimum (seats × cost per seat)
+  const { getPlanPricing } = await import('@/lib/billing/core/billing')
+  const { basePrice } = getPlanPricing(subscription.plan, subscription)
+  return (subscription.seats || 1) * basePrice
 }
 
 /**
@@ -342,58 +368,68 @@ export async function checkUsageStatus(userId: string): Promise<{
  * Sync usage limits based on subscription changes
  */
 export async function syncUsageLimitsFromSubscription(userId: string): Promise<void> {
-  try {
-    const subscription = await getHighestPrioritySubscription(userId)
-    const defaultLimit = getPerUserMinimumLimit(subscription)
+  const [subscription, currentUserStats] = await Promise.all([
+    getHighestPrioritySubscription(userId),
+    db.select().from(userStats).where(eq(userStats.userId, userId)).limit(1),
+  ])
 
-    // Get current user stats
-    const currentUserStats = await db
-      .select()
-      .from(userStats)
-      .where(eq(userStats.userId, userId))
-      .limit(1)
+  if (currentUserStats.length === 0) {
+    throw new Error(`User stats not found for userId: ${userId}`)
+  }
 
-    if (currentUserStats.length === 0) {
-      logger.info('User stats not found, skipping sync', { userId, limit: defaultLimit })
-      return
-    }
+  const currentStats = currentUserStats[0]
 
-    const currentStats = currentUserStats[0]
-    const currentLimit = Number.parseFloat(currentStats.currentUsageLimit)
-
-    // Only update if subscription is free plan or if current limit is below new minimum
-    if (!subscription || subscription.status !== 'active') {
-      // User downgraded to free plan - cap at default free credits
+  // Team/enterprise: Should have null individual limits
+  if (subscription && (subscription.plan === 'team' || subscription.plan === 'enterprise')) {
+    if (currentStats.currentUsageLimit !== null) {
       await db
         .update(userStats)
         .set({
-          currentUsageLimit: DEFAULT_FREE_CREDITS.toString(),
+          currentUsageLimit: null,
           usageLimitUpdatedAt: new Date(),
         })
         .where(eq(userStats.userId, userId))
 
-      logger.info('Synced usage limit to free plan', { userId, limit: DEFAULT_FREE_CREDITS })
-    } else if (currentLimit < defaultLimit) {
-      // User upgraded and current limit is below new minimum - raise to minimum
-      await db
-        .update(userStats)
-        .set({
-          currentUsageLimit: defaultLimit.toString(),
-          usageLimitUpdatedAt: new Date(),
-        })
-        .where(eq(userStats.userId, userId))
-
-      logger.info('Synced usage limit to new minimum', {
+      logger.info('Cleared individual limit for team/enterprise member', {
         userId,
-        oldLimit: currentLimit,
-        newLimit: defaultLimit,
+        plan: subscription.plan,
       })
     }
-    // If user has higher custom limit, keep it unchanged
-  } catch (error) {
-    logger.error('Failed to sync usage limits', { userId, error })
-    throw error
+    return
   }
+
+  // Free/Pro: Handle individual limits
+  const defaultLimit = getPerUserMinimumLimit(subscription)
+  const currentLimit = currentStats.currentUsageLimit
+    ? Number.parseFloat(currentStats.currentUsageLimit)
+    : 0
+
+  if (!subscription || subscription.status !== 'active') {
+    // Downgraded to free
+    await db
+      .update(userStats)
+      .set({
+        currentUsageLimit: DEFAULT_FREE_CREDITS.toString(),
+        usageLimitUpdatedAt: new Date(),
+      })
+      .where(eq(userStats.userId, userId))
+
+    logger.info('Set limit to free tier', { userId })
+  } else if (currentLimit < defaultLimit) {
+    await db
+      .update(userStats)
+      .set({
+        currentUsageLimit: defaultLimit.toString(),
+        usageLimitUpdatedAt: new Date(),
+      })
+      .where(eq(userStats.userId, userId))
+
+    logger.info('Raised limit to plan minimum', {
+      userId,
+      newLimit: defaultLimit,
+    })
+  }
+  // Keep higher custom limits unchanged
 }
 
 /**
