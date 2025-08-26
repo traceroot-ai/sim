@@ -111,15 +111,6 @@ export function MemberInvitationCard({
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-4 p-4 pt-0'>
-        {!hasAvailableSeats && (
-          <Alert className='border-orange-200 bg-orange-50'>
-            <AlertDescription className='text-orange-800'>
-              <strong>No seats available.</strong> You are using all {maxSeats} licensed seats. Add
-              more seats below before inviting new members.
-            </AlertDescription>
-          </Alert>
-        )}
-
         <div className='flex items-center gap-3'>
           <div className='flex-1'>
             <Input

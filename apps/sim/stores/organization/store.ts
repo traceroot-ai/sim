@@ -293,6 +293,14 @@ export const useOrganizationStore = create<OrganizationStore>()(
           const fullOrgResponse = await client.organization.getFullOrganization()
           const updatedOrg = fullOrgResponse.data
 
+          logger.info('Refreshed organization data', {
+            orgId: updatedOrg?.id,
+            members: updatedOrg?.members?.length ?? 0,
+            invitations: updatedOrg?.invitations?.length ?? 0,
+            pendingInvitations:
+              updatedOrg?.invitations?.filter((inv: any) => inv.status === 'pending').length ?? 0,
+          })
+
           set({ activeOrganization: updatedOrg })
 
           // Also refresh subscription data
@@ -594,7 +602,7 @@ export const useOrganizationStore = create<OrganizationStore>()(
         }
 
         const { used: totalCount } = calculateSeatUsage(activeOrganization)
-        if (totalCount >= newSeatCount) {
+        if (totalCount > newSeatCount) {
           set({
             error: `You have ${totalCount} active members/invitations. Please remove members or cancel invitations before reducing seats.`,
           })

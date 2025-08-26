@@ -47,7 +47,6 @@ export interface SubscriptionStore {
     usageLimitData: UsageLimitData | null
   }>
   updateUsageLimit: (newLimit: number) => Promise<{ success: boolean; error?: string }>
-  cancelSubscription: () => Promise<{ success: boolean; error?: string; periodEnd?: Date }>
   refresh: () => Promise<void>
   clearError: () => void
   reset: () => void

@@ -193,53 +193,6 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
         }
       },
 
-      cancelSubscription: async () => {
-        const state = get()
-        if (!state.subscriptionData) {
-          logger.error('No subscription data available for cancellation')
-          return { success: false, error: 'No subscription data available' }
-        }
-
-        set({ isLoading: true, error: null })
-
-        try {
-          const response = await fetch('/api/users/me/subscription/cancel', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          })
-
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.error || 'Failed to cancel subscription')
-          }
-
-          const result = await response.json()
-
-          logger.info('Subscription cancelled successfully', {
-            periodEnd: result.data.periodEnd,
-            cancelAtPeriodEnd: result.data.cancelAtPeriodEnd,
-          })
-
-          // Refresh subscription data to reflect cancellation status
-          await get().refresh()
-
-          return {
-            success: true,
-            periodEnd: result.data.periodEnd ? new Date(result.data.periodEnd) : undefined,
-          }
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Failed to cancel subscription'
-          logger.error('Failed to cancel subscription', { error })
-          set({ error: errorMessage })
-          return { success: false, error: errorMessage }
-        } finally {
-          set({ isLoading: false })
-        }
-      },
-
       refresh: async () => {
         // Force refresh by clearing cache
         set({ lastFetched: null })

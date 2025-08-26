@@ -59,7 +59,6 @@ export function useSession(): SessionHookResult {
 export const { useActiveOrganization } = client
 
 export const useSubscription = () => {
-  // Use the real implementation in both development and production
   return {
     list: client.subscription?.list,
     upgrade: client.subscription?.upgrade,
