@@ -74,7 +74,6 @@ export function LongInput({
 
   // State management - useSubBlockValue with explicit streaming control
   const [storeValue, setStoreValue] = useSubBlockValue(blockId, subBlockId, false, {
-    debounceMs: 150,
     isStreaming: wandHook?.isStreaming || false, // Use wand streaming state
     onStreamingEnd: () => {
       logger.debug('Wand streaming ended, value persisted', { blockId, subBlockId })
