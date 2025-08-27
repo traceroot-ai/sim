@@ -409,13 +409,17 @@ export const useOperationQueueStore = create<OperationQueueState>((set, get) => 
       return
     }
 
-    // Prefer pending op for the currently registered workflow
-    const nextOperation =
-      state.operations.find(
-        (op) => op.status === 'pending' && op.workflowId === currentRegisteredWorkflowId
-      ) || state.operations.find((op) => op.status === 'pending')
+    const nextOperation = currentRegisteredWorkflowId
+      ? state.operations.find(
+          (op) => op.status === 'pending' && op.workflowId === currentRegisteredWorkflowId
+        )
+      : state.operations.find((op) => op.status === 'pending')
     if (!nextOperation) {
-      return // No pending operations
+      return
+    }
+
+    if (currentRegisteredWorkflowId && nextOperation.workflowId !== currentRegisteredWorkflowId) {
+      return
     }
 
     // Mark as processing
@@ -425,11 +429,6 @@ export const useOperationQueueStore = create<OperationQueueState>((set, get) => 
       ),
       isProcessing: true,
     }))
-
-    if (currentRegisteredWorkflowId && nextOperation.workflowId !== currentRegisteredWorkflowId) {
-      set({ isProcessing: false })
-      return
-    }
 
     logger.debug('Processing operation sequentially', {
       operationId: nextOperation.id,
