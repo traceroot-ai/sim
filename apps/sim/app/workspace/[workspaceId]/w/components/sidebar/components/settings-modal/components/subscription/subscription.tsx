@@ -458,7 +458,7 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
 
         {/* Next Billing Date */}
         {subscription.isPaid && subscriptionData?.periodEnd && (
-          <div className='flex items-center justify-between'>
+          <div className='mt-4 flex items-center justify-between'>
             <span className='font-medium text-sm'>Next Billing Date</span>
             <span className='text-muted-foreground text-sm'>
               {new Date(subscriptionData.periodEnd).toLocaleDateString()}
