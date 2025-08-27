@@ -116,9 +116,10 @@ export function TeamSeatsOverview({
 
         {/* Action buttons - below the usage display */}
         {checkEnterprisePlan(subscriptionData) ? (
-          <div className='rounded-[8px] bg-purple-50 p-3 text-center'>
-            <p className='font-medium text-purple-700 text-sm'>Enterprise Plan</p>
-            <p className='mt-1 text-purple-600 text-xs'>Contact support to modify seats</p>
+          <div className='text-center'>
+            <p className='text-muted-foreground text-xs'>
+              Contact enterprise for support usage limit changes
+            </p>
           </div>
         ) : (
           <div className='flex gap-2 pt-1'>

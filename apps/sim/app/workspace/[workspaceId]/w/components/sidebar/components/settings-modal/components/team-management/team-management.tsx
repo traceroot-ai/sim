@@ -283,29 +283,32 @@ export function TeamManagement() {
         {/* Team Usage Overview */}
         <TeamUsage hasAdminAccess={adminOrOwner} />
 
-        {/* Team Billing Information */}
-        <div className='rounded-[8px] border bg-blue-50/50 p-4 shadow-xs dark:bg-blue-950/20'>
-          <div className='space-y-3'>
-            <h4 className='font-medium text-sm'>How Team Billing Works</h4>
-            <ul className='ml-4 list-disc space-y-2 text-muted-foreground text-xs'>
-              <li>
-                Your team is billed a minimum of $
-                {(subscriptionData?.seats || 0) *
-                  (env.TEAM_TIER_COST_LIMIT ?? DEFAULT_TEAM_TIER_COST_LIMIT)}
-                /month for {subscriptionData?.seats || 0} licensed seats
-              </li>
-              <li>All team member usage is pooled together from a shared limit</li>
-              <li>
-                When pooled usage exceeds the limit, all members are blocked from using the service
-              </li>
-              <li>You can increase the usage limit to allow for higher usage</li>
-              <li>
-                Any usage beyond the minimum seat cost is billed as overage at the end of the
-                billing period
-              </li>
-            </ul>
+        {/* Team Billing Information (only show for Team Plan, not Enterprise) */}
+        {hasTeamPlan && !hasEnterprisePlan && (
+          <div className='rounded-[8px] border bg-blue-50/50 p-4 shadow-xs dark:bg-blue-950/20'>
+            <div className='space-y-3'>
+              <h4 className='font-medium text-sm'>How Team Billing Works</h4>
+              <ul className='ml-4 list-disc space-y-2 text-muted-foreground text-xs'>
+                <li>
+                  Your team is billed a minimum of $
+                  {(subscriptionData?.seats || 0) *
+                    (env.TEAM_TIER_COST_LIMIT ?? DEFAULT_TEAM_TIER_COST_LIMIT)}
+                  /month for {subscriptionData?.seats || 0} licensed seats
+                </li>
+                <li>All team member usage is pooled together from a shared limit</li>
+                <li>
+                  When pooled usage exceeds the limit, all members are blocked from using the
+                  service
+                </li>
+                <li>You can increase the usage limit to allow for higher usage</li>
+                <li>
+                  Any usage beyond the minimum seat cost is billed as overage at the end of the
+                  billing period
+                </li>
+              </ul>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Member Invitation Card */}
         {adminOrOwner && (
