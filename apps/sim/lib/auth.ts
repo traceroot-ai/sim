@@ -25,9 +25,9 @@ import { handleNewUser } from '@/lib/billing/core/usage'
 import { syncSubscriptionUsageLimits } from '@/lib/billing/organization'
 import { getPlans } from '@/lib/billing/plans'
 import {
-  handleInvoiceFinalized,
   handleInvoicePaymentFailed,
   handleInvoicePaymentSucceeded,
+  handleInvoiceUpcoming,
 } from '@/lib/billing/webhooks/invoices'
 import { sendEmail } from '@/lib/email/mailer'
 import { getFromEmailAddress } from '@/lib/email/utils'
@@ -1301,8 +1301,8 @@ export const auth = betterAuth({
                     await handleInvoicePaymentFailed(event)
                     break
                   }
-                  case 'invoice.finalized': {
-                    await handleInvoiceFinalized(event)
+                  case 'invoice.upcoming': {
+                    await handleInvoiceUpcoming(event)
                     break
                   }
                   default:

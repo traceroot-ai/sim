@@ -11,7 +11,7 @@ import {
 import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
-import { member, organization, subscription, user, userStats } from '@/db/schema'
+import { member, organization, subscription, user } from '@/db/schema'
 
 const logger = createLogger('Billing')
 
@@ -378,29 +378,6 @@ export async function processUserOverageBilling(userId: string): Promise<Billing
         basePrice: overageInfo.basePrice,
         actualUsage: overageInfo.actualUsage,
       })
-
-      // Still reset billing period even if no overage
-      try {
-        const currentStats = await db
-          .select({ currentPeriodCost: userStats.currentPeriodCost })
-          .from(userStats)
-          .where(eq(userStats.userId, userId))
-          .limit(1)
-
-        if (currentStats.length > 0) {
-          const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
-          await db
-            .update(userStats)
-            .set({
-              lastPeriodCost: currentPeriodCost,
-              currentPeriodCost: '0',
-            })
-            .where(eq(userStats.userId, userId))
-        }
-      } catch (resetError) {
-        logger.error('Failed to reset billing period', { userId, error: resetError })
-      }
-
       return { success: true, chargedAmount: 0 }
     }
 
@@ -456,33 +433,7 @@ export async function processUserOverageBilling(userId: string): Promise<Billing
       metadata
     )
 
-    // If billing was successful, reset the user's billing period
-    if (result.success) {
-      try {
-        const currentStats = await db
-          .select({ currentPeriodCost: userStats.currentPeriodCost })
-          .from(userStats)
-          .where(eq(userStats.userId, userId))
-          .limit(1)
-
-        if (currentStats.length > 0) {
-          const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
-          await db
-            .update(userStats)
-            .set({
-              lastPeriodCost: currentPeriodCost,
-              currentPeriodCost: '0',
-            })
-            .where(eq(userStats.userId, userId))
-        }
-        logger.info('Successfully reset billing period after charging user overage', { userId })
-      } catch (resetError) {
-        logger.error('Failed to reset billing period after successful overage charge', {
-          userId,
-          error: resetError,
-        })
-      }
-    }
+    // Do not reset here. Reset only happens in invoice.payment_succeeded handler.
 
     return result
   } catch (error) {
@@ -584,6 +535,15 @@ export async function processOrganizationOverageBilling(
 
     // Calculate team-level overage: total usage beyond what was already paid to Stripe
     const totalOverage = Math.max(0, totalTeamUsage - baseSubscriptionAmount)
+    logger.info('Organization overage calculation', {
+      organizationId,
+      licensedSeats,
+      basePricePerSeat,
+      baseSubscriptionAmount,
+      totalTeamUsage,
+      totalOverage,
+      memberUsageDetails,
+    })
 
     // Skip if no overage across the organization
     if (totalOverage <= 0) {
@@ -593,34 +553,7 @@ export async function processOrganizationOverageBilling(
         totalTeamUsage,
         baseSubscriptionAmount,
       })
-
-      // Still reset billing period for all members
-      try {
-        for (const memberRecord of members) {
-          const currentStats = await db
-            .select({ currentPeriodCost: userStats.currentPeriodCost })
-            .from(userStats)
-            .where(eq(userStats.userId, memberRecord.userId))
-            .limit(1)
-
-          if (currentStats.length > 0) {
-            const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
-            await db
-              .update(userStats)
-              .set({
-                lastPeriodCost: currentPeriodCost,
-                currentPeriodCost: '0',
-              })
-              .where(eq(userStats.userId, memberRecord.userId))
-          }
-        }
-      } catch (resetError) {
-        logger.error('Failed to reset organization billing period', {
-          organizationId,
-          error: resetError,
-        })
-      }
-
+      // Do not reset here. Reset happens only in invoice.payment_succeeded.
       return { success: true, chargedAmount: 0 }
     }
 
@@ -646,41 +579,7 @@ export async function processOrganizationOverageBilling(
       metadata
     )
 
-    // If billing was successful, reset billing period for all organization members
-    if (result.success) {
-      try {
-        for (const memberRecord of members) {
-          const currentStats = await db
-            .select({ currentPeriodCost: userStats.currentPeriodCost })
-            .from(userStats)
-            .where(eq(userStats.userId, memberRecord.userId))
-            .limit(1)
-
-          if (currentStats.length > 0) {
-            const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
-            await db
-              .update(userStats)
-              .set({
-                lastPeriodCost: currentPeriodCost,
-                currentPeriodCost: '0',
-              })
-              .where(eq(userStats.userId, memberRecord.userId))
-          }
-        }
-        logger.info('Successfully reset billing period for organization after overage billing', {
-          organizationId,
-          memberCount: members.length,
-        })
-      } catch (resetError) {
-        logger.error(
-          'Failed to reset organization billing period after successful overage charge',
-          {
-            organizationId,
-            error: resetError,
-          }
-        )
-      }
-    }
+    // Do not reset here. Reset happens only in invoice.payment_succeeded.
 
     logger.info('Processed organization overage billing', {
       organizationId,

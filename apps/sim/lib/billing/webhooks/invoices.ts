@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm'
 import type Stripe from 'stripe'
+import { getUserUsageData } from '@/lib/billing/core/usage'
+import { requireStripeClient } from '@/lib/billing/stripe-client'
 import { createLogger } from '@/lib/logs/console/logger'
 import { db } from '@/db'
 import { member, subscription as subscriptionTable, userStats } from '@/db/schema'
@@ -33,9 +35,9 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
     }
 
     // Case 2: Subscription renewal invoice paid (primary period rollover)
-    // Only reset on successful payment to avoid granting a new period while in dunning
+    // Compute overage at payment time, then reset usage
     if (invoice.subscription) {
-      // Filter to subscription-cycle renewals; ignore updates/off-cycle charges
+      // Filter to subscription-cycle renewals only; ignore updates/off-cycle charges
       const reason = invoice.billing_reason
       const isCycle = reason === 'subscription_cycle'
       if (!isCycle) {
@@ -63,6 +65,52 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 
       const sub = records[0]
 
+      // 1) Compute and bill overage for the period that just ended
+      try {
+        if (sub.plan === 'team' || sub.plan === 'enterprise') {
+          const { processOrganizationOverageBilling } = await import('@/lib/billing/core/billing')
+          const result = await processOrganizationOverageBilling(sub.referenceId)
+          if (result.success) {
+            logger.info('Processed organization overage at payment time', {
+              invoiceId: invoice.id,
+              organizationId: sub.referenceId,
+              chargedAmount: result.chargedAmount,
+            })
+          } else {
+            logger.error('Failed organization overage at payment time', {
+              invoiceId: invoice.id,
+              organizationId: sub.referenceId,
+              error: result.error,
+            })
+          }
+        } else {
+          const { processUserOverageBilling } = await import('@/lib/billing/core/billing')
+          const result = await processUserOverageBilling(sub.referenceId)
+          if (result.success) {
+            logger.info('Processed user overage at payment time', {
+              invoiceId: invoice.id,
+              userId: sub.referenceId,
+              chargedAmount: result.chargedAmount,
+            })
+          } else {
+            logger.error('Failed user overage at payment time', {
+              invoiceId: invoice.id,
+              userId: sub.referenceId,
+              error: result.error,
+            })
+          }
+        }
+      } catch (billingError) {
+        logger.error('Exception during overage billing at payment time', {
+          invoiceId: invoice.id,
+          referenceId: sub.referenceId,
+          plan: sub.plan,
+          error: billingError,
+        })
+        // Continue to reset usage even if overage billing failed
+      }
+
+      // 2) Reset usage counters
       if (sub.plan === 'team' || sub.plan === 'enterprise') {
         // Reset billing period for all organization members
         const members = await db
@@ -184,118 +232,99 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
   }
 }
 
-/**
- * Handle invoice finalized webhook
- * This is triggered when a usage billing invoice is finalized and ready for payment
- * For subscription renewals, this is where we calculate and create overage charges
- */
-export async function handleInvoiceFinalized(event: Stripe.Event) {
+export async function handleInvoiceUpcoming(event: Stripe.Event) {
   try {
     const invoice = event.data.object as Stripe.Invoice
 
-    // Handle overage billing invoices
-    if (invoice.metadata?.type === 'overage_billing') {
-      const customerId = invoice.customer as string
-      const invoiceAmount = invoice.amount_due / 100
-      const billingPeriod = invoice.metadata?.billingPeriod || 'unknown'
-      logger.info('Overage billing invoice finalized', {
-        invoiceId: invoice.id,
-        customerId,
-        invoiceAmount,
-        billingPeriod,
+    if (!invoice.subscription) {
+      logger.info('Ignoring upcoming invoice without subscription')
+      return
+    }
+
+    const stripeSubscriptionId = String(invoice.subscription)
+    const records = await db
+      .select()
+      .from(subscriptionTable)
+      .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscriptionId))
+      .limit(1)
+
+    if (records.length === 0) {
+      logger.warn('No matching internal subscription for upcoming invoice', {
+        stripeSubscriptionId,
       })
       return
     }
 
-    // Handle subscription renewal invoices - calculate overages for the ending period
-    if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {
-      const stripeSubscriptionId = String(invoice.subscription)
-      const records = await db
-        .select()
-        .from(subscriptionTable)
-        .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscriptionId))
-        .limit(1)
+    const sub = records[0]
 
-      if (records.length === 0) {
-        logger.warn('No matching internal subscription for finalized subscription invoice', {
-          invoiceId: invoice.id,
-          stripeSubscriptionId,
-        })
-        return
+    // Organization: sum member usage; Individual: single user
+    if (sub.plan === 'team' || sub.plan === 'enterprise') {
+      const members = await db
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, sub.referenceId))
+
+      let totalTeamUsage = 0
+      for (const m of members) {
+        const usage = await getUserUsageData(m.userId)
+        totalTeamUsage += usage.currentUsage
       }
 
-      const sub = records[0]
+      const licensedSeats = sub.seats || 1
+      const basePricePerSeat = invoice.total ? 0 : 0 // not used; we compute with plan util
+      const { getPlanPricing } = await import('@/lib/billing/core/billing')
+      const { basePrice } = getPlanPricing(sub.plan, sub)
+      const baseSubscriptionAmount = licensedSeats * basePrice
+      const totalOverage = Math.max(0, totalTeamUsage - baseSubscriptionAmount)
 
-      // Calculate and create overage charges before the new period begins
-      logger.info('Processing overage billing for subscription cycle', {
-        invoiceId: invoice.id,
-        subscriptionId: sub.id,
-        referenceId: sub.referenceId,
-        plan: sub.plan,
+      logger.info('Invoice upcoming overage calculation (org)', {
+        organizationId: sub.referenceId,
+        totalTeamUsage,
+        licensedSeats,
+        basePricePerSeat: basePrice,
+        baseSubscriptionAmount,
+        totalOverage,
       })
 
-      try {
-        if (sub.plan === 'team' || sub.plan === 'enterprise') {
-          // Organization overage billing
-          const { processOrganizationOverageBilling } = await import('@/lib/billing/core/billing')
-          const result = await processOrganizationOverageBilling(sub.referenceId)
-
-          if (result.success) {
-            logger.info('Successfully processed organization overage billing', {
-              invoiceId: invoice.id,
-              organizationId: sub.referenceId,
-              chargedAmount: result.chargedAmount,
-            })
-          } else {
-            logger.error('Failed to process organization overage billing', {
-              invoiceId: invoice.id,
-              organizationId: sub.referenceId,
-              error: result.error,
-            })
-          }
-        } else {
-          // Individual user overage billing
-          const { processUserOverageBilling } = await import('@/lib/billing/core/billing')
-          const result = await processUserOverageBilling(sub.referenceId)
-
-          if (result.success) {
-            logger.info('Successfully processed user overage billing', {
-              invoiceId: invoice.id,
-              userId: sub.referenceId,
-              chargedAmount: result.chargedAmount,
-            })
-          } else {
-            logger.error('Failed to process user overage billing', {
-              invoiceId: invoice.id,
-              userId: sub.referenceId,
-              error: result.error,
-            })
-          }
-        }
-      } catch (overageBillingError) {
-        logger.error('Exception during overage billing processing', {
-          invoiceId: invoice.id,
-          subscriptionId: sub.id,
-          referenceId: sub.referenceId,
-          plan: sub.plan,
-          error: overageBillingError,
+      if (totalOverage > 0) {
+        const stripe = requireStripeClient()
+        await stripe.invoiceItems.create({
+          customer: invoice.customer as string,
+          subscription: stripeSubscriptionId,
+          amount: Math.round(totalOverage * 100),
+          currency: 'usd',
+          description: `Overage for ${new Date().toISOString().slice(0, 7)}`,
+          metadata: { type: 'overage_billing', organizationId: sub.referenceId },
         })
-        // Don't throw - let the subscription renewal proceed even if overage billing fails
+        logger.info('Added overage invoice item to upcoming invoice (org)', {
+          organizationId: sub.referenceId,
+          totalOverage,
+        })
       }
+    } else {
+      const usage = await getUserUsageData(sub.referenceId)
+      const { getPlanPricing } = await import('@/lib/billing/core/billing')
+      const { basePrice } = getPlanPricing(sub.plan, sub)
+      const overage = Math.max(0, usage.currentUsage - basePrice)
 
-      return
+      if (overage > 0) {
+        const stripe = requireStripeClient()
+        await stripe.invoiceItems.create({
+          customer: invoice.customer as string,
+          subscription: stripeSubscriptionId,
+          amount: Math.round(overage * 100),
+          currency: 'usd',
+          description: `Overage for ${new Date().toISOString().slice(0, 7)}`,
+          metadata: { type: 'overage_billing', userId: sub.referenceId },
+        })
+        logger.info('Added overage invoice item to upcoming invoice (user)', {
+          userId: sub.referenceId,
+          overage,
+        })
+      }
     }
-
-    logger.info('Ignoring non-subscription-cycle invoice finalization', {
-      invoiceId: invoice.id,
-      billingReason: invoice.billing_reason,
-      hasSubscription: !!invoice.subscription,
-    })
   } catch (error) {
-    logger.error('Failed to handle invoice finalized', {
-      eventId: event.id,
-      error,
-    })
-    throw error // Re-throw to signal webhook failure
+    logger.error('Failed to handle invoice upcoming', { error })
+    throw error
   }
 }
