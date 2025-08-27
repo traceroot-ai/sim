@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge, Progress, Skeleton } from '@/components/ui'
 import { useSession } from '@/lib/auth-client'
-import { createLogger } from '@/lib/logs/console/logger'
 import { useSubscriptionUpgrade } from '@/lib/subscription/upgrade'
 import { cn } from '@/lib/utils'
 import {
@@ -24,10 +23,6 @@ import {
 import { useOrganizationStore } from '@/stores/organization'
 import { useSubscriptionStore } from '@/stores/subscription/store'
 
-// Logger
-const logger = createLogger('Subscription')
-
-// Constants
 const CONSTANTS = {
   UPGRADE_ERROR_TIMEOUT: 3000, // 3 seconds
   TYPEFORM_ENTERPRISE_URL: 'https://form.typeform.com/to/jqCO12pF',
@@ -36,13 +31,11 @@ const CONSTANTS = {
   INITIAL_TEAM_SEATS: 1,
 } as const
 
-// Styles
 const STYLES = {
   GRADIENT_BADGE:
     'gradient-text h-[1.125rem] rounded-[6px] border-gradient-primary/20 bg-gradient-to-b from-gradient-primary via-gradient-secondary to-gradient-primary px-2 py-0 font-medium text-xs cursor-pointer',
 } as const
 
-// Types
 type TargetPlan = 'pro' | 'team'
 
 interface SubscriptionProps {
@@ -50,7 +43,7 @@ interface SubscriptionProps {
 }
 
 /**
- * Skeleton component for subscription loading state
+ * Skeleton component for subscription loading state.
  */
 function SubscriptionSkeleton() {
   return (
@@ -171,7 +164,6 @@ function SubscriptionSkeleton() {
   )
 }
 
-// Utility functions
 const formatPlanName = (plan: string): string => plan.charAt(0).toUpperCase() + plan.slice(1)
 
 /**
@@ -259,7 +251,7 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
 
   // UI state computed values
   const showBadge = permissions.canEditUsageLimit && !permissions.showTeamMemberView
-  const badgeText = subscription.isFree ? 'Upgrade' : 'Add'
+  const badgeText = subscription.isFree ? 'Upgrade' : 'Increase Limit'
 
   const handleBadgeClick = () => {
     if (subscription.isFree) {
@@ -461,6 +453,16 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
                 </>
               )
             })()}
+          </div>
+        )}
+
+        {/* Next Billing Date */}
+        {subscription.isPaid && subscriptionData?.periodEnd && (
+          <div className='flex items-center justify-between'>
+            <span className='font-medium text-sm'>Next Billing Date</span>
+            <span className='text-muted-foreground text-sm'>
+              {new Date(subscriptionData.periodEnd).toLocaleDateString()}
+            </span>
           </div>
         )}
 
