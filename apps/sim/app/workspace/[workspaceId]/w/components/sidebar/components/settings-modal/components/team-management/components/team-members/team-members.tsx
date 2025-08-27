@@ -17,7 +17,6 @@ interface TeamMemberItem {
   email: string
   role: string
   usage?: string
-  poolContribution?: string
   lastActive?: string
   member?: Member
   invitation?: Invitation
@@ -43,7 +42,6 @@ export function TeamMembers({
         email: member.user?.email || '',
         role: member.role,
         usage: '$0.00', // TODO: Get real usage data
-        poolContribution: '$0.00', // TODO: Get real pool contribution
         lastActive: '8/26/2025', // TODO: Get real last active date
         member,
       })
@@ -63,7 +61,6 @@ export function TeamMembers({
         email: invitation.email,
         role: 'pending',
         usage: '-',
-        poolContribution: '-',
         lastActive: '-',
         invitation,
       })
@@ -127,10 +124,6 @@ export function TeamMembers({
                 <div className='text-center'>
                   <div className='text-muted-foreground'>Usage</div>
                   <div className='font-medium'>{item.usage}</div>
-                </div>
-                <div className='text-center'>
-                  <div className='text-muted-foreground'>Pool</div>
-                  <div className='font-medium'>{item.poolContribution}</div>
                 </div>
                 <div className='text-center'>
                   <div className='text-muted-foreground'>Active</div>

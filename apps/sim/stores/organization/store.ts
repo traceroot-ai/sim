@@ -183,13 +183,14 @@ export const useOrganizationStore = create<OrganizationStore>()(
         }
       },
 
-      loadOrganizationBillingData: async (organizationId: string) => {
+      loadOrganizationBillingData: async (organizationId: string, force?: boolean) => {
         const state = get()
 
         if (
           state.organizationBillingData &&
           state.lastOrgBillingFetched &&
-          Date.now() - state.lastOrgBillingFetched < CACHE_DURATION
+          Date.now() - state.lastOrgBillingFetched < CACHE_DURATION &&
+          !force
         ) {
           logger.debug('Using cached organization billing data')
           return

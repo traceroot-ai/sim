@@ -42,10 +42,7 @@ const logger = createLogger('Auth')
 
 // Only initialize Stripe if the key is provided
 // This allows local development without a Stripe account
-const validStripeKey =
-  env.STRIPE_SECRET_KEY &&
-  env.STRIPE_SECRET_KEY.trim() !== '' &&
-  env.STRIPE_SECRET_KEY !== 'placeholder'
+const validStripeKey = env.STRIPE_SECRET_KEY
 
 let stripeClient = null
 if (validStripeKey) {

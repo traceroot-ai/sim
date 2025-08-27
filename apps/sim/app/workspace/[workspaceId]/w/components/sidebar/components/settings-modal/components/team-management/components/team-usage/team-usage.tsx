@@ -7,6 +7,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveOrganization } from '@/lib/auth-client'
 import { createLogger } from '@/lib/logs/console/logger'
 import { cn } from '@/lib/utils'
+import {
+  UsageLimit,
+  type UsageLimitRef,
+} from '@/app/workspace/[workspaceId]/w/components/sidebar/components/settings-modal/components/subscription/components'
 import { useOrganizationStore } from '@/stores/organization'
 
 const logger = createLogger('TeamUsage')
@@ -220,11 +224,13 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
     async (newLimit: number) => {
       // Reload the organization billing data to reflect the new limit
       if (activeOrg?.id) {
-        await loadOrganizationBillingData(activeOrg.id)
+        await loadOrganizationBillingData(activeOrg.id, true)
       }
     },
     [activeOrg?.id, loadOrganizationBillingData]
   )
+
+  const usageLimitRef = useRef<UsageLimitRef | null>(null)
 
   if (isLoadingOrgBilling) {
     return (
@@ -280,13 +286,7 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
               <button
                 type='button'
                 onClick={() => {
-                  // Find the TeamUsageLimit component and trigger edit mode
-                  const editButton = document.querySelector(
-                    '[data-team-usage-edit]'
-                  ) as HTMLButtonElement
-                  if (editButton) {
-                    editButton.click()
-                  }
+                  usageLimitRef.current?.startEdit()
                 }}
                 className='gradient-text h-[1.125rem] cursor-pointer rounded-[6px] border border-gradient-primary/20 bg-gradient-to-b from-gradient-primary via-gradient-secondary to-gradient-primary px-2 py-0 font-medium text-xs'
               >
@@ -299,11 +299,13 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
             <span className='text-muted-foreground'>${currentUsage.toFixed(2)}</span>
             <span className='text-muted-foreground'>/</span>
             {hasAdminAccess && activeOrg?.id ? (
-              <TeamUsageLimit
+              <UsageLimit
+                ref={usageLimitRef}
                 currentLimit={currentCap}
                 currentUsage={currentUsage}
                 canEdit={hasAdminAccess}
                 minimumLimit={minimumBilling}
+                context='organization'
                 organizationId={activeOrg.id}
                 onLimitUpdated={handleLimitUpdated}
               />

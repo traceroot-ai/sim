@@ -65,52 +65,7 @@ export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
 
       const sub = records[0]
 
-      // 1) Compute and bill overage for the period that just ended
-      try {
-        if (sub.plan === 'team' || sub.plan === 'enterprise') {
-          const { processOrganizationOverageBilling } = await import('@/lib/billing/core/billing')
-          const result = await processOrganizationOverageBilling(sub.referenceId)
-          if (result.success) {
-            logger.info('Processed organization overage at payment time', {
-              invoiceId: invoice.id,
-              organizationId: sub.referenceId,
-              chargedAmount: result.chargedAmount,
-            })
-          } else {
-            logger.error('Failed organization overage at payment time', {
-              invoiceId: invoice.id,
-              organizationId: sub.referenceId,
-              error: result.error,
-            })
-          }
-        } else {
-          const { processUserOverageBilling } = await import('@/lib/billing/core/billing')
-          const result = await processUserOverageBilling(sub.referenceId)
-          if (result.success) {
-            logger.info('Processed user overage at payment time', {
-              invoiceId: invoice.id,
-              userId: sub.referenceId,
-              chargedAmount: result.chargedAmount,
-            })
-          } else {
-            logger.error('Failed user overage at payment time', {
-              invoiceId: invoice.id,
-              userId: sub.referenceId,
-              error: result.error,
-            })
-          }
-        }
-      } catch (billingError) {
-        logger.error('Exception during overage billing at payment time', {
-          invoiceId: invoice.id,
-          referenceId: sub.referenceId,
-          plan: sub.plan,
-          error: billingError,
-        })
-        // Continue to reset usage even if overage billing failed
-      }
-
-      // 2) Reset usage counters
+      // Reset usage counters
       if (sub.plan === 'team' || sub.plan === 'enterprise') {
         // Reset billing period for all organization members
         const members = await db
@@ -257,6 +212,28 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
 
     const sub = records[0]
 
+    // Helper to add an overage invoice item with idempotency
+    async function addOverageItem(
+      customerId: string,
+      subscriptionId: string,
+      amountDollars: number,
+      metadata: Record<string, string>
+    ) {
+      const stripe = requireStripeClient()
+      const billingPeriod = new Date().toISOString().slice(0, 7)
+      await stripe.invoiceItems.create(
+        {
+          customer: customerId,
+          subscription: subscriptionId,
+          amount: Math.round(amountDollars * 100),
+          currency: 'usd',
+          description: `Overage for ${billingPeriod}`,
+          metadata: { type: 'overage_billing', billingPeriod, ...metadata },
+        },
+        { idempotencyKey: `${customerId}:${subscriptionId}:${billingPeriod}:overage` }
+      )
+    }
+
     // Organization: sum member usage; Individual: single user
     if (sub.plan === 'team' || sub.plan === 'enterprise') {
       const members = await db
@@ -286,14 +263,8 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
       })
 
       if (totalOverage > 0) {
-        const stripe = requireStripeClient()
-        await stripe.invoiceItems.create({
-          customer: invoice.customer as string,
-          subscription: stripeSubscriptionId,
-          amount: Math.round(totalOverage * 100),
-          currency: 'usd',
-          description: `Overage for ${new Date().toISOString().slice(0, 7)}`,
-          metadata: { type: 'overage_billing', organizationId: sub.referenceId },
+        await addOverageItem(invoice.customer as string, stripeSubscriptionId, totalOverage, {
+          organizationId: sub.referenceId,
         })
         logger.info('Added overage invoice item to upcoming invoice (org)', {
           organizationId: sub.referenceId,
@@ -307,14 +278,8 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
       const overage = Math.max(0, usage.currentUsage - basePrice)
 
       if (overage > 0) {
-        const stripe = requireStripeClient()
-        await stripe.invoiceItems.create({
-          customer: invoice.customer as string,
-          subscription: stripeSubscriptionId,
-          amount: Math.round(overage * 100),
-          currency: 'usd',
-          description: `Overage for ${new Date().toISOString().slice(0, 7)}`,
-          metadata: { type: 'overage_billing', userId: sub.referenceId },
+        await addOverageItem(invoice.customer as string, stripeSubscriptionId, overage, {
+          userId: sub.referenceId,
         })
         logger.info('Added overage invoice item to upcoming invoice (user)', {
           userId: sub.referenceId,

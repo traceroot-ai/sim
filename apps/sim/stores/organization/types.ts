@@ -135,7 +135,7 @@ export interface OrganizationState {
 export interface OrganizationStore extends OrganizationState {
   loadData: () => Promise<void>
   loadOrganizationSubscription: (orgId: string) => Promise<void>
-  loadOrganizationBillingData: (organizationId: string) => Promise<void>
+  loadOrganizationBillingData: (organizationId: string, force?: boolean) => Promise<void>
   loadUserWorkspaces: (userId?: string) => Promise<void>
   refreshOrganization: () => Promise<void>
 

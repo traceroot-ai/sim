@@ -383,10 +383,26 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
                     subscription.isEnterprise) ? (
                     <UsageLimit
                       ref={usageLimitRef}
-                      currentLimit={usageLimitData?.currentLimit || usage.limit}
+                      currentLimit={
+                        subscription.isTeam && isTeamAdmin
+                          ? organizationBillingData?.totalUsageLimit || usage.limit
+                          : usageLimitData?.currentLimit || usage.limit
+                      }
                       currentUsage={usage.current}
                       canEdit={permissions.canEditUsageLimit && !subscription.isEnterprise}
-                      minimumLimit={usageLimitData?.minimumLimit || (subscription.isPro ? 20 : 40)}
+                      minimumLimit={
+                        subscription.isTeam && isTeamAdmin
+                          ? organizationBillingData?.minimumBillingAmount ||
+                            (subscription.isPro ? 20 : 40)
+                          : usageLimitData?.minimumLimit || (subscription.isPro ? 20 : 40)
+                      }
+                      context={subscription.isTeam && isTeamAdmin ? 'organization' : 'user'}
+                      organizationId={subscription.isTeam && isTeamAdmin ? activeOrgId : undefined}
+                      onLimitUpdated={async () => {
+                        if (subscription.isTeam && isTeamAdmin && activeOrgId) {
+                          await loadOrganizationBillingData(activeOrgId, true)
+                        }
+                      }}
                     />
                   ) : (
                     <span className='text-muted-foreground'>${usage.limit}</span>
