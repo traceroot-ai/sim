@@ -271,7 +271,6 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
       }
 
       const licensedSeats = sub.seats || 1
-      const basePricePerSeat = invoice.total ? 0 : 0 // not used; we compute with plan util
       const { getPlanPricing } = await import('@/lib/billing/core/billing')
       const { basePrice } = getPlanPricing(sub.plan, sub)
       const baseSubscriptionAmount = licensedSeats * basePrice
