@@ -163,20 +163,6 @@ export const useOperationQueueStore = create<OperationQueueState>((set, get) => 
         const pending = variableDebounced.get(debounceKey)
         variableDebounced.delete(debounceKey)
         if (pending) {
-          // Coalesce to only the latest value: replace any existing pending op for same key
-          set((state) => ({
-            operations: state.operations.filter(
-              (op) =>
-                !(
-                  op.status === 'pending' &&
-                  op.operation.operation === 'variable-update' &&
-                  op.operation.target === 'variable' &&
-                  op.operation.payload?.variableId === pending.op.operation.payload.variableId &&
-                  op.operation.payload?.field === pending.op.operation.payload.field
-                )
-            ),
-          }))
-
           const queuedOp: QueuedOperation = {
             ...pending.op,
             timestamp: Date.now(),

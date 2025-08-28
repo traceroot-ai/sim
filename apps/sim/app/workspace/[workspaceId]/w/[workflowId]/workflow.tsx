@@ -177,8 +177,6 @@ const WorkflowContent = React.memo(() => {
     collaborativeSetSubblockValue,
   } = useCollaborativeWorkflow()
 
-  // Variables store no longer tracks loaded state
-
   // Execution and debug mode state
   const { activeBlockIds, pendingBlocks } = useExecutionStore()
   const { isDebugModeEnabled } = useGeneralStore()
