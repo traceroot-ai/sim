@@ -230,9 +230,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         const workspaceWorkflowIds = new Set(workflows.map((w) => w.id))
 
         const workspaceChats = items.filter(
-          (c: any) =>
-            !c.workflowId ||
-            workspaceWorkflowIds.has(c.workflowId)
+          (c: any) => !c.workflowId || workspaceWorkflowIds.has(c.workflowId)
         )
 
         setPastChats(
