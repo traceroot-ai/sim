@@ -36,7 +36,6 @@ import { useStreamCleanup } from '@/hooks/use-stream-cleanup'
 import { useWorkspacePermissions } from '@/hooks/use-workspace-permissions'
 import { useCopilotStore } from '@/stores/copilot/store'
 import { useExecutionStore } from '@/stores/execution/store'
-import { useVariablesStore } from '@/stores/panel/variables/store'
 import { useGeneralStore } from '@/stores/settings/general/store'
 import { useWorkflowDiffStore } from '@/stores/workflow-diff/store'
 import { hasWorkflowsInitiallyLoaded, useWorkflowRegistry } from '@/stores/workflows/registry/store'
@@ -178,7 +177,7 @@ const WorkflowContent = React.memo(() => {
     collaborativeSetSubblockValue,
   } = useCollaborativeWorkflow()
 
-  const { resetLoaded: resetVariablesLoaded } = useVariablesStore()
+  // Variables store no longer tracks loaded state
 
   // Execution and debug mode state
   const { activeBlockIds, pendingBlocks } = useExecutionStore()
@@ -960,9 +959,6 @@ const WorkflowContent = React.memo(() => {
       const { activeWorkflowId } = useWorkflowRegistry.getState()
 
       if (activeWorkflowId !== currentId) {
-        // Only reset variables when actually switching workflows
-        resetVariablesLoaded()
-
         // Clear workflow diff store when switching workflows
         const { clearDiff } = useWorkflowDiffStore.getState()
         clearDiff()
@@ -975,15 +971,7 @@ const WorkflowContent = React.memo(() => {
     }
 
     validateAndNavigate()
-  }, [
-    params.workflowId,
-    workflows,
-    isLoading,
-    setActiveWorkflow,
-    createWorkflow,
-    router,
-    resetVariablesLoaded,
-  ])
+  }, [params.workflowId, workflows, isLoading, setActiveWorkflow, createWorkflow, router])
 
   // Transform blocks and loops into ReactFlow nodes
   const nodes = useMemo(() => {
