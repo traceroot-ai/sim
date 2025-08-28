@@ -162,8 +162,42 @@ export function EnvironmentVariables({
       | 'key'
       | 'value'
 
-    // If we're in a specific input field, check if this looks like environment variable key-value pairs
-    if (inputType) {
+    // If we're pasting into a value field specifically
+    if (inputType === 'value') {
+      // For single line pastes into value fields, always treat as a single value
+      // This prevents URLs with query parameters from being split
+      if (lines.length === 1) {
+        handleSingleValuePaste(text, index, inputType)
+        return
+      }
+
+      // For multi-line pastes, check if ALL lines look like env var declarations
+      // This prevents false positives from URLs or other content
+      const allLinesAreEnvVars = lines.every((line) => {
+        const equalIndex = line.indexOf('=')
+        if (equalIndex === -1 || equalIndex === 0) return false
+
+        const potentialKey = line.substring(0, equalIndex).trim()
+        const envVarPattern = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+        // Additional check: if the line looks like a URL, don't treat as env var
+        const beforeEqual = line.substring(0, equalIndex)
+        if (beforeEqual.includes('://') || beforeEqual.includes('?') || beforeEqual.includes('&')) {
+          return false
+        }
+
+        return envVarPattern.test(potentialKey)
+      })
+
+      // Only parse as env vars if ALL lines match the pattern
+      if (!allLinesAreEnvVars) {
+        handleSingleValuePaste(text, index, inputType)
+        return
+      }
+    }
+
+    // If we're in a key field, check if this looks like environment variable key-value pairs
+    if (inputType === 'key') {
       // Check if this looks like valid environment variable key-value pairs
       const hasValidEnvVarPattern = lines.some((line) => {
         const equalIndex = line.indexOf('=')
@@ -203,6 +237,12 @@ export function EnvironmentVariables({
         }
 
         const potentialKey = line.substring(0, equalIndex).trim()
+        const beforeEqual = line.substring(0, equalIndex)
+
+        // Skip if the line looks like a URL (contains protocol, query params, etc)
+        if (beforeEqual.includes('://') || beforeEqual.includes('?') || beforeEqual.includes('&')) {
+          return null
+        }
 
         // Check if the potential key looks like an environment variable name
         // Should be letters, numbers, underscores, and not contain spaces, URLs, etc.
