@@ -36,4 +36,4 @@ export async function GET(_req: NextRequest) {
     logger.error('Error fetching user copilot chats:', error)
     return createInternalServerErrorResponse('Failed to fetch user chats')
   }
-} 
+}

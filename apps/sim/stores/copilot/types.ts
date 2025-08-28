@@ -117,7 +117,11 @@ export interface CopilotActions {
 
   sendMessage: (
     message: string,
-    options?: { stream?: boolean; fileAttachments?: MessageFileAttachment[]; contexts?: ChatContext[] }
+    options?: {
+      stream?: boolean
+      fileAttachments?: MessageFileAttachment[]
+      contexts?: ChatContext[]
+    }
   ) => Promise<void>
   abortMessage: () => void
   sendImplicitFeedback: (

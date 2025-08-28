@@ -274,14 +274,17 @@ export const ToolResultSchemas = {
     .or(z.object({ userWorkflow: z.string() }))
     .or(z.string()),
   // New variable tools
-  get_global_workflow_variables: z.object({ variables: z.record(z.any()) }).or(
-    z.array(z.object({ name: z.string(), value: z.any() }))
-  ),
+  get_global_workflow_variables: z
+    .object({ variables: z.record(z.any()) })
+    .or(z.array(z.object({ name: z.string(), value: z.any() }))),
   set_global_workflow_variables: z
     .object({ variables: z.record(z.any()) })
     .or(z.object({ message: z.any().optional(), data: z.any().optional() })),
   // New
-  oauth_request_access: z.object({ granted: z.boolean().optional(), message: z.string().optional() }),
+  oauth_request_access: z.object({
+    granted: z.boolean().optional(),
+    message: z.string().optional(),
+  }),
 
   build_workflow: BuildOrEditWorkflowResult,
   edit_workflow: BuildOrEditWorkflowResult,

@@ -65,4 +65,4 @@ export class GetGlobalWorkflowVariablesClientTool extends BaseClientTool {
       this.setState(ClientToolCallState.error)
     }
   }
-} 
+}

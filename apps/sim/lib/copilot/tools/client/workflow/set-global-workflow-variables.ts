@@ -32,7 +32,10 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
 
   static readonly metadata: BaseClientToolMetadata = {
     displayNames: {
-      [ClientToolCallState.generating]: { text: 'Preparing to set workflow variables', icon: Loader2 },
+      [ClientToolCallState.generating]: {
+        text: 'Preparing to set workflow variables',
+        icon: Loader2,
+      },
       [ClientToolCallState.pending]: { text: 'Set workflow variables?', icon: Settings2 },
       [ClientToolCallState.executing]: { text: 'Setting workflow variables', icon: Loader2 },
       [ClientToolCallState.success]: { text: 'Workflow variables updated', icon: Settings2 },
@@ -65,7 +68,9 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
       }
 
       // Fetch current variables so we can construct full array payload
-      const getRes = await fetch(`/api/workflows/${payload.workflowId}/variables`, { method: 'GET' })
+      const getRes = await fetch(`/api/workflows/${payload.workflowId}/variables`, {
+        method: 'GET',
+      })
       if (!getRes.ok) {
         const txt = await getRes.text().catch(() => '')
         throw new Error(txt || 'Failed to load current variables')
@@ -145,7 +150,6 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
               ...(op.value !== undefined ? { value: typedValue } : {}),
             }
           }
-          continue
         }
       }
 
@@ -165,7 +169,9 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
       try {
         const { activeWorkflowId } = useWorkflowRegistry.getState()
         if (activeWorkflowId) {
-          const { loadVariables } = (await import('@/stores/panel/variables/store')).useVariablesStore.getState()
+          const { loadVariables } = (
+            await import('@/stores/panel/variables/store')
+          ).useVariablesStore.getState()
           await loadVariables(String(activeWorkflowId))
         }
       } catch {}
@@ -182,4 +188,4 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
   async execute(args?: SetGlobalVarsArgs): Promise<void> {
     await this.handleAccept(args)
   }
-} 
+}

@@ -21,6 +21,7 @@ import {
 import { CheckoffTodoClientTool } from '@/lib/copilot/tools/client/other/checkoff-todo'
 import { MakeApiRequestClientTool } from '@/lib/copilot/tools/client/other/make-api-request'
 import { MarkTodoInProgressClientTool } from '@/lib/copilot/tools/client/other/mark-todo-in-progress'
+import { OAuthRequestAccessClientTool } from '@/lib/copilot/tools/client/other/oauth-request-access'
 import { PlanClientTool } from '@/lib/copilot/tools/client/other/plan'
 import { SearchDocumentationClientTool } from '@/lib/copilot/tools/client/other/search-documentation'
 import { SearchOnlineClientTool } from '@/lib/copilot/tools/client/other/search-online'
@@ -30,25 +31,24 @@ import { GetOAuthCredentialsClientTool } from '@/lib/copilot/tools/client/user/g
 import { SetEnvironmentVariablesClientTool } from '@/lib/copilot/tools/client/user/set-environment-variables'
 import { BuildWorkflowClientTool } from '@/lib/copilot/tools/client/workflow/build-workflow'
 import { EditWorkflowClientTool } from '@/lib/copilot/tools/client/workflow/edit-workflow'
+import { GetGlobalWorkflowVariablesClientTool } from '@/lib/copilot/tools/client/workflow/get-global-workflow-variables'
 import { GetUserWorkflowClientTool } from '@/lib/copilot/tools/client/workflow/get-user-workflow'
 import { GetWorkflowConsoleClientTool } from '@/lib/copilot/tools/client/workflow/get-workflow-console'
-import { RunWorkflowClientTool } from '@/lib/copilot/tools/client/workflow/run-workflow'
-import { ListUserWorkflowsClientTool } from '@/lib/copilot/tools/client/workflow/list-user-workflows'
 import { GetWorkflowFromNameClientTool } from '@/lib/copilot/tools/client/workflow/get-workflow-from-name'
-import { GetGlobalWorkflowVariablesClientTool } from '@/lib/copilot/tools/client/workflow/get-global-workflow-variables'
+import { ListUserWorkflowsClientTool } from '@/lib/copilot/tools/client/workflow/list-user-workflows'
+import { RunWorkflowClientTool } from '@/lib/copilot/tools/client/workflow/run-workflow'
 import { SetGlobalWorkflowVariablesClientTool } from '@/lib/copilot/tools/client/workflow/set-global-workflow-variables'
 import { createLogger } from '@/lib/logs/console/logger'
 import type {
+  ChatContext,
   CopilotMessage,
   CopilotStore,
   CopilotToolCall,
   MessageFileAttachment,
-  ChatContext,
 } from '@/stores/copilot/types'
 import { useWorkflowDiffStore } from '@/stores/workflow-diff/store'
 import { useSubBlockStore } from '@/stores/workflows/subblock/store'
 import { useWorkflowStore } from '@/stores/workflows/workflow/store'
-import { OAuthRequestAccessClientTool } from '@/lib/copilot/tools/client/other/oauth-request-access'
 
 const logger = createLogger('CopilotStore')
 
@@ -483,9 +483,10 @@ function validateMessagesForLLM(messages: CopilotMessage[]): any[] {
           msg.fileAttachments.length > 0 && {
             fileAttachments: msg.fileAttachments,
           }),
-        ...((msg as any).contexts && Array.isArray((msg as any).contexts) && {
-          contexts: (msg as any).contexts,
-        }),
+        ...((msg as any).contexts &&
+          Array.isArray((msg as any).contexts) && {
+            contexts: (msg as any).contexts,
+          }),
       }
     })
     .filter((m) => {
@@ -1460,7 +1461,11 @@ export const useCopilotStore = create<CopilotStore>()(
     // Send a message (streaming only)
     sendMessage: async (message: string, options = {}) => {
       const { workflowId, currentChat, mode, revertState } = get()
-      const { stream = true, fileAttachments, contexts } = options as {
+      const {
+        stream = true,
+        fileAttachments,
+        contexts,
+      } = options as {
         stream?: boolean
         fileAttachments?: MessageFileAttachment[]
         contexts?: ChatContext[]
@@ -1501,7 +1506,12 @@ export const useCopilotStore = create<CopilotStore>()(
             hasContexts: Array.isArray(contexts),
             contextsCount: Array.isArray(contexts) ? contexts.length : 0,
             contextsPreview: Array.isArray(contexts)
-              ? contexts.map((c: any) => ({ kind: c?.kind, chatId: (c as any)?.chatId, workflowId: (c as any)?.workflowId, label: (c as any)?.label }))
+              ? contexts.map((c: any) => ({
+                  kind: c?.kind,
+                  chatId: (c as any)?.chatId,
+                  workflowId: (c as any)?.workflowId,
+                  label: (c as any)?.label,
+                }))
               : undefined,
           })
         } catch {}

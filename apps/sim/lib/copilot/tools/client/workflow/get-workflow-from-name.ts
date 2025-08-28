@@ -46,7 +46,10 @@ export class GetWorkflowFromNameClientTool extends BaseClientTool {
       // Try to find by name from registry first to get ID
       const registry = useWorkflowRegistry.getState()
       const match = Object.values((registry as any).workflows || {}).find(
-        (w: any) => String(w?.name || '').trim().toLowerCase() === workflowName.toLowerCase()
+        (w: any) =>
+          String(w?.name || '')
+            .trim()
+            .toLowerCase() === workflowName.toLowerCase()
       ) as any
 
       if (!match?.id) {
@@ -89,4 +92,4 @@ export class GetWorkflowFromNameClientTool extends BaseClientTool {
       this.setState(ClientToolCallState.error)
     }
   }
-} 
+}

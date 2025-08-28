@@ -1,13 +1,17 @@
+import { and, eq, isNull } from 'drizzle-orm'
 import { createLogger } from '@/lib/logs/console/logger'
-import type { ChatContext } from '@/stores/copilot/types'
-import { db } from '@/db'
-import { copilotChats } from '@/db/schema'
-import { and, eq } from 'drizzle-orm'
 import { loadWorkflowFromNormalizedTables } from '@/lib/workflows/db-helpers'
-import { knowledgeBase, document, templates } from '@/db/schema'
-import { isNull } from 'drizzle-orm'
+import { db } from '@/db'
+import { copilotChats, document, knowledgeBase, templates } from '@/db/schema'
+import type { ChatContext } from '@/stores/copilot/types'
 
-export type AgentContextType = 'past_chat' | 'workflow' | 'blocks' | 'logs' | 'knowledge' | 'templates'
+export type AgentContextType =
+  | 'past_chat'
+  | 'workflow'
+  | 'blocks'
+  | 'logs'
+  | 'knowledge'
+  | 'templates'
 
 export interface AgentContext {
   type: AgentContextType
@@ -17,7 +21,9 @@ export interface AgentContext {
 
 const logger = createLogger('ProcessContents')
 
-export async function processContexts(contexts: ChatContext[] | undefined): Promise<AgentContext[]> {
+export async function processContexts(
+  contexts: ChatContext[] | undefined
+): Promise<AgentContext[]> {
   if (!Array.isArray(contexts) || contexts.length === 0) return []
   const tasks = contexts.map(async (ctx) => {
     try {
@@ -28,13 +34,19 @@ export async function processContexts(contexts: ChatContext[] | undefined): Prom
         return await processWorkflowFromDb(ctx.workflowId, ctx.label ? `@${ctx.label}` : '@')
       }
       if (ctx.kind === 'knowledge' && (ctx as any).knowledgeId) {
-        return await processKnowledgeFromDb((ctx as any).knowledgeId, ctx.label ? `@${ctx.label}` : '@')
+        return await processKnowledgeFromDb(
+          (ctx as any).knowledgeId,
+          ctx.label ? `@${ctx.label}` : '@'
+        )
       }
       if (ctx.kind === 'blocks' && (ctx as any).blockId) {
         return await processBlockMetadata((ctx as any).blockId, ctx.label ? `@${ctx.label}` : '@')
       }
       if (ctx.kind === 'templates' && (ctx as any).templateId) {
-        return await processTemplateFromDb((ctx as any).templateId, ctx.label ? `@${ctx.label}` : '@')
+        return await processTemplateFromDb(
+          (ctx as any).templateId,
+          ctx.label ? `@${ctx.label}` : '@'
+        )
       }
       // Other kinds can be added here: workflow, blocks, logs, knowledge, templates
       return null
@@ -63,13 +75,19 @@ export async function processContextsServer(
         return await processWorkflowFromDb(ctx.workflowId, ctx.label ? `@${ctx.label}` : '@')
       }
       if (ctx.kind === 'knowledge' && (ctx as any).knowledgeId) {
-        return await processKnowledgeFromDb((ctx as any).knowledgeId, ctx.label ? `@${ctx.label}` : '@')
+        return await processKnowledgeFromDb(
+          (ctx as any).knowledgeId,
+          ctx.label ? `@${ctx.label}` : '@'
+        )
       }
       if (ctx.kind === 'blocks' && (ctx as any).blockId) {
         return await processBlockMetadata((ctx as any).blockId, ctx.label ? `@${ctx.label}` : '@')
       }
       if (ctx.kind === 'templates' && (ctx as any).templateId) {
-        return await processTemplateFromDb((ctx as any).templateId, ctx.label ? `@${ctx.label}` : '@')
+        return await processTemplateFromDb(
+          (ctx as any).templateId,
+          ctx.label ? `@${ctx.label}` : '@'
+        )
       }
       return null
     } catch (error) {
@@ -78,13 +96,13 @@ export async function processContextsServer(
     }
   })
   const results = await Promise.all(tasks)
-  const filtered = results.filter((r): r is AgentContext => !!r && typeof r.content === 'string' && r.content.trim().length > 0)
+  const filtered = results.filter(
+    (r): r is AgentContext => !!r && typeof r.content === 'string' && r.content.trim().length > 0
+  )
   logger.info('Processed contexts (server)', {
     totalRequested: contexts.length,
     totalProcessed: filtered.length,
-    kinds: Array.from(
-      filtered.reduce((s, r) => s.add(r.type), new Set<string>())
-    ),
+    kinds: Array.from(filtered.reduce((s, r) => s.add(r.type), new Set<string>())),
   })
   return filtered
 }
@@ -129,7 +147,10 @@ async function processPastChatFromDb(
   }
 }
 
-async function processWorkflowFromDb(workflowId: string, tag: string): Promise<AgentContext | null> {
+async function processWorkflowFromDb(
+  workflowId: string,
+  tag: string
+): Promise<AgentContext | null> {
   try {
     const normalized = await loadWorkflowFromNormalizedTables(workflowId)
     if (!normalized) {
@@ -196,11 +217,18 @@ async function processPastChatViaApi(chatId: string, tag?: string) {
   return processPastChat(chatId, tag)
 }
 
-async function processKnowledgeFromDb(knowledgeBaseId: string, tag: string): Promise<AgentContext | null> {
+async function processKnowledgeFromDb(
+  knowledgeBaseId: string,
+  tag: string
+): Promise<AgentContext | null> {
   try {
     // Load KB metadata
     const kbRows = await db
-      .select({ id: knowledgeBase.id, name: knowledgeBase.name, updatedAt: knowledgeBase.updatedAt })
+      .select({
+        id: knowledgeBase.id,
+        name: knowledgeBase.name,
+        updatedAt: knowledgeBase.updatedAt,
+      })
       .from(knowledgeBase)
       .where(and(eq(knowledgeBase.id, knowledgeBaseId), isNull(knowledgeBase.deletedAt)))
       .limit(1)
@@ -290,7 +318,10 @@ async function processBlockMetadata(blockId: string, tag: string): Promise<Agent
   }
 }
 
-async function processTemplateFromDb(templateId: string, tag: string): Promise<AgentContext | null> {
+async function processTemplateFromDb(
+  templateId: string,
+  tag: string
+): Promise<AgentContext | null> {
   try {
     const rows = await db
       .select({
@@ -324,4 +355,4 @@ async function processTemplateFromDb(templateId: string, tag: string): Promise<A
     logger.error('Error processing template context (db)', { templateId, error })
     return null
   }
-} 
+}

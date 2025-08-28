@@ -101,7 +101,12 @@ export async function POST(req: NextRequest) {
         hasContexts: Array.isArray(contexts),
         contextsCount: Array.isArray(contexts) ? contexts.length : 0,
         contextsPreview: Array.isArray(contexts)
-          ? contexts.map((c: any) => ({ kind: c?.kind, chatId: c?.chatId, workflowId: c?.workflowId, label: c?.label }))
+          ? contexts.map((c: any) => ({
+              kind: c?.kind,
+              chatId: c?.chatId,
+              workflowId: c?.workflowId,
+              label: c?.label,
+            }))
           : undefined,
       })
     } catch {}

@@ -296,22 +296,25 @@ export function InlineToolCall({
       const method = (params.method || '').toUpperCase()
       return (
         <div className='mt-0.5 w-full overflow-hidden rounded border border-muted bg-card'>
-          <div className='grid grid-cols-2 gap-0 border-b border-muted/60 bg-muted/40 px-2 py-1.5'>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+          <div className='grid grid-cols-2 gap-0 border-muted/60 border-b bg-muted/40 px-2 py-1.5'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Method
             </div>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Endpoint
             </div>
           </div>
           <div className='grid grid-cols-[auto_1fr] items-center gap-2 px-2 py-2'>
             <div>
-              <span className='inline-flex rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground'>
+              <span className='inline-flex rounded bg-muted px-1.5 py-0.5 font-mono text-muted-foreground text-xs'>
                 {method || 'GET'}
               </span>
             </div>
             <div className='min-w-0'>
-              <span className='block whitespace-nowrap overflow-x-auto font-mono text-xs text-foreground' title={url}>
+              <span
+                className='block overflow-x-auto whitespace-nowrap font-mono text-foreground text-xs'
+                title={url}
+              >
                 {url || 'URL not provided'}
               </span>
             </div>
@@ -326,11 +329,11 @@ export function InlineToolCall({
       const entries = Object.entries(variables)
       return (
         <div className='mt-0.5 w-full overflow-hidden rounded border border-muted bg-card'>
-          <div className='grid grid-cols-2 gap-0 border-b border-muted/60 bg-muted/40 px-2 py-1.5'>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+          <div className='grid grid-cols-2 gap-0 border-muted/60 border-b bg-muted/40 px-2 py-1.5'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Name
             </div>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Value
             </div>
           </div>
@@ -340,11 +343,11 @@ export function InlineToolCall({
             <div className='divide-y divide-muted/60'>
               {entries.map(([k, v]) => (
                 <div key={k} className='grid grid-cols-[auto_1fr] items-center gap-2 px-2 py-1.5'>
-                  <div className='truncate font-medium text-xs text-amber-800 dark:text-amber-200'>
+                  <div className='truncate font-medium text-amber-800 text-xs dark:text-amber-200'>
                     {k}
                   </div>
                   <div className='min-w-0'>
-                    <span className='block whitespace-nowrap overflow-x-auto font-mono text-xs text-amber-700 dark:text-amber-300'>
+                    <span className='block overflow-x-auto whitespace-nowrap font-mono text-amber-700 text-xs dark:text-amber-300'>
                       {String(v)}
                     </span>
                   </div>
@@ -360,14 +363,14 @@ export function InlineToolCall({
       const ops = Array.isArray(params.operations) ? (params.operations as any[]) : []
       return (
         <div className='mt-0.5 w-full overflow-hidden rounded border border-muted bg-card'>
-          <div className='grid grid-cols-3 gap-0 border-b border-muted/60 bg-muted/40 px-2 py-1.5'>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+          <div className='grid grid-cols-3 gap-0 border-muted/60 border-b bg-muted/40 px-2 py-1.5'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Name
             </div>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Type
             </div>
-            <div className='text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
+            <div className='font-medium text-[10px] text-muted-foreground uppercase tracking-wide'>
               Value
             </div>
           </div>
@@ -378,7 +381,7 @@ export function InlineToolCall({
               {ops.map((op, idx) => (
                 <div key={idx} className='grid grid-cols-3 items-center gap-0 px-2 py-1.5'>
                   <div className='min-w-0'>
-                    <span className='truncate text-xs text-amber-800 dark:text-amber-200'>
+                    <span className='truncate text-amber-800 text-xs dark:text-amber-200'>
                       {String(op.name || '')}
                     </span>
                   </div>
@@ -389,7 +392,7 @@ export function InlineToolCall({
                   </div>
                   <div className='min-w-0'>
                     {op.value !== undefined ? (
-                      <span className='block whitespace-nowrap overflow-x-auto font-mono text-xs text-amber-700 dark:text-amber-300'>
+                      <span className='block overflow-x-auto whitespace-nowrap font-mono text-amber-700 text-xs dark:text-amber-300'>
                         {String(op.value)}
                       </span>
                     ) : (

@@ -106,11 +106,18 @@ export async function sendStreamingMessage(
     const { abortSignal, ...requestBody } = request
     try {
       const preview = Array.isArray((requestBody as any).contexts)
-        ? (requestBody as any).contexts.map((c: any) => ({ kind: c?.kind, chatId: c?.chatId, workflowId: c?.workflowId, label: c?.label }))
+        ? (requestBody as any).contexts.map((c: any) => ({
+            kind: c?.kind,
+            chatId: c?.chatId,
+            workflowId: c?.workflowId,
+            label: c?.label,
+          }))
         : undefined
       logger.info('Preparing to send streaming message', {
         hasContexts: Array.isArray((requestBody as any).contexts),
-        contextsCount: Array.isArray((requestBody as any).contexts) ? (requestBody as any).contexts.length : 0,
+        contextsCount: Array.isArray((requestBody as any).contexts)
+          ? (requestBody as any).contexts.length
+          : 0,
         contextsPreview: preview,
       })
     } catch {}

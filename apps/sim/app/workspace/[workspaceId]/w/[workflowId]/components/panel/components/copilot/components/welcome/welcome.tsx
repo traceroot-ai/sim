@@ -1,6 +1,6 @@
 'use client'
 
-import { Bot, Workflow, Blocks, LibraryBig } from 'lucide-react'
+import { Blocks, Bot, LibraryBig, Workflow } from 'lucide-react'
 
 interface CopilotWelcomeProps {
   onQuestionClick?: (question: string) => void
@@ -78,7 +78,7 @@ export function CopilotWelcome({ onQuestionClick, mode = 'ask' }: CopilotWelcome
                 </div>
                 <div>
                   <div className='font-medium text-xs'>{title}</div>
-                  <p className='mt-1 text-muted-foreground text-[11px]'>{question}</p>
+                  <p className='mt-1 text-[11px] text-muted-foreground'>{question}</p>
                 </div>
               </div>
             </button>
@@ -86,8 +86,11 @@ export function CopilotWelcome({ onQuestionClick, mode = 'ask' }: CopilotWelcome
         </div>
 
         {/* Tips */}
-        <div className='mt-6 text-center text-muted-foreground text-[11px]'>
-          <p>Tip: Use <span className='font-medium text-foreground'>@</span> to reference chats, workflows, knowledge, blocks, or templates</p>
+        <div className='mt-6 text-center text-[11px] text-muted-foreground'>
+          <p>
+            Tip: Use <span className='font-medium text-foreground'>@</span> to reference chats,
+            workflows, knowledge, blocks, or templates
+          </p>
           <p className='mt-1.5'>Shift+Enter for newline</p>
         </div>
       </div>

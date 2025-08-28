@@ -40,7 +40,7 @@ export class OAuthRequestAccessClientTool extends BaseClientTool {
         const onClosed = async (evt: Event) => {
           try {
             const detail = (evt as CustomEvent).detail as { success?: boolean }
-            if (detail && detail.success) {
+            if (detail?.success) {
               await this.markToolComplete(200, { granted: true })
               this.setState(ClientToolCallState.success)
             } else {
@@ -52,9 +52,13 @@ export class OAuthRequestAccessClientTool extends BaseClientTool {
             this.cleanupListener = undefined
           }
         }
-        window.addEventListener('oauth-integration-closed', onClosed as EventListener, {
-          once: true,
-        } as any)
+        window.addEventListener(
+          'oauth-integration-closed',
+          onClosed as EventListener,
+          {
+            once: true,
+          } as any
+        )
         this.cleanupListener = () =>
           window.removeEventListener('oauth-integration-closed', onClosed as EventListener)
 
@@ -83,4 +87,4 @@ export class OAuthRequestAccessClientTool extends BaseClientTool {
   async execute(): Promise<void> {
     await this.handleAccept()
   }
-} 
+}

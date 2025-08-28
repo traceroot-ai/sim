@@ -10,21 +10,26 @@ import {
 } from 'react'
 import {
   ArrowUp,
+  AtSign,
+  Blocks,
+  Bot,
   Brain,
   BrainCircuit,
   Check,
+  ChevronRight,
   FileText,
   Image,
   Infinity as InfinityIcon,
   Info,
-  ChevronRight,
+  LibraryBig,
   Loader2,
   MessageCircle,
   Package,
   Paperclip,
+  Shapes,
+  Workflow,
   X,
   Zap,
-  AtSign,
 } from 'lucide-react'
 import {
   Button,
@@ -39,8 +44,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui'
-import { LibraryBig, Bot, Workflow, Blocks, Shapes } from 'lucide-react'
-import { Input } from '@/components/ui'
 import { useSession } from '@/lib/auth-client'
 import { createLogger } from '@/lib/logs/console/logger'
 import { cn } from '@/lib/utils'
@@ -70,7 +73,11 @@ interface AttachedFile {
 }
 
 interface UserInputProps {
-  onSubmit: (message: string, fileAttachments?: MessageFileAttachment[], contexts?: ChatContext[]) => void
+  onSubmit: (
+    message: string,
+    fileAttachments?: MessageFileAttachment[],
+    contexts?: ChatContext[]
+  ) => void
   onAbort?: () => void
   disabled?: boolean
   isLoading?: boolean
@@ -120,20 +127,27 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
     const [openSubmenuFor, setOpenSubmenuFor] = useState<string | null>(null)
     const [submenuActiveIndex, setSubmenuActiveIndex] = useState(0)
     const [inAggregated, setInAggregated] = useState(false)
-    const isSubmenu = (
-      v: 'Chats' | 'Workflows' | 'Knowledge' | 'Blocks' | 'Templates'
-    ) => openSubmenuFor === v
-    const [pastChats, setPastChats] = useState<Array<{ id: string; title: string | null; workflowId: string | null; updatedAt?: string }>>([])
+    const isSubmenu = (v: 'Chats' | 'Workflows' | 'Knowledge' | 'Blocks' | 'Templates') =>
+      openSubmenuFor === v
+    const [pastChats, setPastChats] = useState<
+      Array<{ id: string; title: string | null; workflowId: string | null; updatedAt?: string }>
+    >([])
     const [isLoadingPastChats, setIsLoadingPastChats] = useState(false)
     // Removed explicit submenu query inputs; we derive query from the text typed after '@'
     const [selectedContexts, setSelectedContexts] = useState<ChatContext[]>([])
-    const [workflows, setWorkflows] = useState<Array<{ id: string; name: string; color?: string }>>([])
+    const [workflows, setWorkflows] = useState<Array<{ id: string; name: string; color?: string }>>(
+      []
+    )
     const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false)
     const [knowledgeBases, setKnowledgeBases] = useState<Array<{ id: string; name: string }>>([])
     const [isLoadingKnowledge, setIsLoadingKnowledge] = useState(false)
-    const [blocksList, setBlocksList] = useState<Array<{ id: string; name: string; iconComponent?: any; bgColor?: string }>>([])
+    const [blocksList, setBlocksList] = useState<
+      Array<{ id: string; name: string; iconComponent?: any; bgColor?: string }>
+    >([])
     const [isLoadingBlocks, setIsLoadingBlocks] = useState(false)
-    const [templatesList, setTemplatesList] = useState<Array<{ id: string; name: string; stars: number }>>([])
+    const [templatesList, setTemplatesList] = useState<
+      Array<{ id: string; name: string; stars: number }>
+    >([])
     const [isLoadingTemplates, setIsLoadingTemplates] = useState(false)
     // const [templatesQuery, setTemplatesQuery] = useState('')
 
@@ -141,7 +155,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
     const { currentChat, workflowId } = useCopilotStore()
 
     // Determine placeholder based on mode
-    const effectivePlaceholder = placeholder || (mode === 'ask' ? 'Ask, plan, understand workflows' : 'Build, edit, debug workflows')
+    const effectivePlaceholder =
+      placeholder ||
+      (mode === 'ask' ? 'Ask, plan, understand workflows' : 'Build, edit, debug workflows')
 
     // Track submenu query anchor and aggregate mode
     const [submenuQueryStart, setSubmenuQueryStart] = useState<number | null>(null)
@@ -232,10 +248,14 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           return tb - ta
         })
         setWorkflows(
-          sorted.map((w: any) => ({ id: w.id, name: w.name || 'Untitled Workflow', color: w.color }))
+          sorted.map((w: any) => ({
+            id: w.id,
+            name: w.name || 'Untitled Workflow',
+            color: w.color,
+          }))
         )
-      } catch {}
-      finally {
+      } catch {
+      } finally {
         setIsLoadingWorkflows(false)
       }
     }
@@ -255,8 +275,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           return tb - ta
         })
         setKnowledgeBases(sorted.map((k: any) => ({ id: k.id, name: k.name || 'Untitled' })))
-      } catch {}
-      finally {
+      } catch {
+      } finally {
         setIsLoadingKnowledge(false)
       }
     }
@@ -289,8 +309,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
 
         const mapped = [...regularBlocks, ...toolBlocks]
         setBlocksList(mapped)
-      } catch {}
-      finally {
+      } catch {
+      } finally {
         setIsLoadingBlocks(false)
       }
     }
@@ -307,8 +327,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           .map((t: any) => ({ id: t.id, name: t.name || 'Untitled Template', stars: t.stars || 0 }))
           .sort((a: any, b: any) => b.stars - a.stars)
         setTemplatesList(mapped)
-      } catch {}
-      finally {
+      } catch {
+      } finally {
         setIsLoadingTemplates(false)
       }
     }
@@ -530,24 +550,37 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         e.preventDefault()
         const caretPos = getCaretPos()
         const active = getActiveMentionQueryAtPosition(caretPos)
-        const mainQ = (!openSubmenuFor ? (active?.query || '') : '').toLowerCase()
+        const mainQ = (!openSubmenuFor ? active?.query || '' : '').toLowerCase()
         const filteredMain = !openSubmenuFor
           ? mentionOptions.filter((o) => o.toLowerCase().includes(mainQ))
           : []
         const isAggregate = !openSubmenuFor && mainQ.length > 0 && filteredMain.length === 0
-        const aggregatedList = !openSubmenuFor && mainQ.length > 0
-          ? [
-              ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(mainQ)).map((w) => ({ type: 'Workflows' as const, value: w })),
-              ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(mainQ)).map((b) => ({ type: 'Blocks' as const, value: b })),
-              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(mainQ)).map((k) => ({ type: 'Knowledge' as const, value: k })),
-              ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(mainQ)).map((t) => ({ type: 'Templates' as const, value: t })),
-              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(mainQ)).map((c) => ({ type: 'Chats' as const, value: c })),
-            ]
-          : []
+        const aggregatedList =
+          !openSubmenuFor && mainQ.length > 0
+            ? [
+                ...workflows
+                  .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(mainQ))
+                  .map((w) => ({ type: 'Workflows' as const, value: w })),
+                ...blocksList
+                  .filter((b) => (b.name || b.id).toLowerCase().includes(mainQ))
+                  .map((b) => ({ type: 'Blocks' as const, value: b })),
+                ...knowledgeBases
+                  .filter((k) => (k.name || 'Untitled').toLowerCase().includes(mainQ))
+                  .map((k) => ({ type: 'Knowledge' as const, value: k })),
+                ...templatesList
+                  .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(mainQ))
+                  .map((t) => ({ type: 'Templates' as const, value: t })),
+                ...pastChats
+                  .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(mainQ))
+                  .map((c) => ({ type: 'Chats' as const, value: c })),
+              ]
+            : []
 
         if (openSubmenuFor === 'Chats' && pastChats.length > 0) {
           const q = getSubmenuQuery().toLowerCase()
-          const filtered = pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
+          const filtered = pastChats.filter((c) =>
+            (c.title || 'Untitled Chat').toLowerCase().includes(q)
+          )
           setSubmenuActiveIndex((prev) => {
             const last = Math.max(0, filtered.length - 1)
             let next = prev
@@ -559,7 +592,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           })
         } else if (openSubmenuFor === 'Workflows' && workflows.length > 0) {
           const q = getSubmenuQuery().toLowerCase()
-          const filtered = workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
+          const filtered = workflows.filter((w) =>
+            (w.name || 'Untitled Workflow').toLowerCase().includes(q)
+          )
           setSubmenuActiveIndex((prev) => {
             const last = Math.max(0, filtered.length - 1)
             let next = prev
@@ -571,7 +606,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           })
         } else if (openSubmenuFor === 'Knowledge' && knowledgeBases.length > 0) {
           const q = getSubmenuQuery().toLowerCase()
-          const filtered = knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
+          const filtered = knowledgeBases.filter((k) =>
+            (k.name || 'Untitled').toLowerCase().includes(q)
+          )
           setSubmenuActiveIndex((prev) => {
             const last = Math.max(0, filtered.length - 1)
             let next = prev
@@ -595,7 +632,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           })
         } else if (openSubmenuFor === 'Templates' && templatesList.length > 0) {
           const q = getSubmenuQuery().toLowerCase()
-          const filtered = templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
+          const filtered = templatesList.filter((t) =>
+            (t.name || 'Untitled Template').toLowerCase().includes(q)
+          )
           setSubmenuActiveIndex((prev) => {
             const last = Math.max(0, filtered.length - 1)
             let next = prev
@@ -608,11 +647,21 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         } else if (isAggregate) {
           const q = mainQ
           const aggregated = [
-            ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
-            ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
-            ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
-            ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
-            ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
+            ...workflows
+              .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
+              .map((w) => ({ type: 'Workflows' as const, value: w })),
+            ...blocksList
+              .filter((b) => (b.name || b.id).toLowerCase().includes(q))
+              .map((b) => ({ type: 'Blocks' as const, value: b })),
+            ...knowledgeBases
+              .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
+              .map((k) => ({ type: 'Knowledge' as const, value: k })),
+            ...templatesList
+              .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
+              .map((t) => ({ type: 'Templates' as const, value: t })),
+            ...pastChats
+              .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
+              .map((c) => ({ type: 'Chats' as const, value: c })),
           ]
           setInAggregated(true)
           setSubmenuActiveIndex((prev) => {
@@ -644,10 +693,16 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                 setMentionActiveIndex(0)
                 requestAnimationFrame(() => scrollActiveItemIntoView(0))
               }
-            } else if (e.key === 'ArrowUp' && mentionActiveIndex <= 0 && aggregatedList.length > 0) {
+            } else if (
+              e.key === 'ArrowUp' &&
+              mentionActiveIndex <= 0 &&
+              aggregatedList.length > 0
+            ) {
               setInAggregated(true)
               setSubmenuActiveIndex(Math.max(0, aggregatedList.length - 1))
-              requestAnimationFrame(() => scrollActiveItemIntoView(Math.max(0, aggregatedList.length - 1)))
+              requestAnimationFrame(() =>
+                scrollActiveItemIntoView(Math.max(0, aggregatedList.length - 1))
+              )
             } else {
               setMentionActiveIndex((prev) => {
                 const last = lastMain
@@ -678,7 +733,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                   // move to main last
                   setInAggregated(false)
                   setMentionActiveIndex(Math.max(0, filteredMain.length - 1))
-                  requestAnimationFrame(() => scrollActiveItemIntoView(Math.max(0, filteredMain.length - 1)))
+                  requestAnimationFrame(() =>
+                    scrollActiveItemIntoView(Math.max(0, filteredMain.length - 1))
+                  )
                   return prev
                 }
                 next = prev - 1
@@ -780,7 +837,11 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       }
 
       // Arrow navigation: jump over mention tokens, never land inside
-      if (!showMentionMenu && selectionLength === 0 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      if (
+        !showMentionMenu &&
+        selectionLength === 0 &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+      ) {
         const textarea = textareaRef.current
         if (textarea) {
           if (e.key === 'ArrowLeft') {
@@ -839,11 +900,21 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           if (inAggregated) {
             const q = mainQ
             const aggregated = [
-              ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
-              ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
-              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
-              ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
-              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
+              ...workflows
+                .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
+                .map((w) => ({ type: 'Workflows' as const, value: w })),
+              ...blocksList
+                .filter((b) => (b.name || b.id).toLowerCase().includes(q))
+                .map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...knowledgeBases
+                .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
+                .map((k) => ({ type: 'Knowledge' as const, value: k })),
+              ...templatesList
+                .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
+                .map((t) => ({ type: 'Templates' as const, value: t })),
+              ...pastChats
+                .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
+                .map((c) => ({ type: 'Chats' as const, value: c })),
             ]
             const idx = Math.max(0, Math.min(submenuActiveIndex, aggregated.length - 1))
             const chosen = aggregated[idx]
@@ -862,9 +933,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             void ensurePastChatsLoaded()
           } else if (openSubmenuFor === 'Chats') {
             const q = getSubmenuQuery().toLowerCase()
-            const filtered = pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
+            const filtered = pastChats.filter((c) =>
+              (c.title || 'Untitled Chat').toLowerCase().includes(q)
+            )
             if (filtered.length > 0) {
-              const chosen = filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
+              const chosen =
+                filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
               insertPastChatMention(chosen)
               setSubmenuQueryStart(null)
             }
@@ -876,9 +950,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             void ensureWorkflowsLoaded()
           } else if (openSubmenuFor === 'Workflows') {
             const q = getSubmenuQuery().toLowerCase()
-            const filtered = workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
+            const filtered = workflows.filter((w) =>
+              (w.name || 'Untitled Workflow').toLowerCase().includes(q)
+            )
             if (filtered.length > 0) {
-              const chosen = filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
+              const chosen =
+                filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
               insertWorkflowMention(chosen)
               setSubmenuQueryStart(null)
             }
@@ -890,9 +967,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             void ensureKnowledgeLoaded()
           } else if (openSubmenuFor === 'Knowledge') {
             const q = getSubmenuQuery().toLowerCase()
-            const filtered = knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
+            const filtered = knowledgeBases.filter((k) =>
+              (k.name || 'Untitled').toLowerCase().includes(q)
+            )
             if (filtered.length > 0) {
-              const chosen = filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
+              const chosen =
+                filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
               insertKnowledgeMention(chosen)
               setSubmenuQueryStart(null)
             }
@@ -906,7 +986,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             const q = getSubmenuQuery().toLowerCase()
             const filtered = blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q))
             if (filtered.length > 0) {
-              const chosen = filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
+              const chosen =
+                filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
               insertBlockMention(chosen)
               setSubmenuQueryStart(null)
             }
@@ -918,20 +999,33 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             void ensureTemplatesLoaded()
           } else if (openSubmenuFor === 'Templates') {
             const q = getSubmenuQuery().toLowerCase()
-            const filtered = templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
+            const filtered = templatesList.filter((t) =>
+              (t.name || 'Untitled Template').toLowerCase().includes(q)
+            )
             if (filtered.length > 0) {
-              const chosen = filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
+              const chosen =
+                filtered[Math.max(0, Math.min(submenuActiveIndex, filtered.length - 1))]
               insertTemplateMention(chosen)
               setSubmenuQueryStart(null)
             }
           } else if (isAggregate || inAggregated) {
             const q = mainQ
             const aggregated = [
-              ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
-              ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
-              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
-              ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
-              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
+              ...workflows
+                .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
+                .map((w) => ({ type: 'Workflows' as const, value: w })),
+              ...blocksList
+                .filter((b) => (b.name || b.id).toLowerCase().includes(q))
+                .map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...knowledgeBases
+                .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
+                .map((k) => ({ type: 'Knowledge' as const, value: k })),
+              ...templatesList
+                .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
+                .map((t) => ({ type: 'Templates' as const, value: t })),
+              ...pastChats
+                .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
+                .map((c) => ({ type: 'Chats' as const, value: c })),
             ]
             const idx = Math.max(0, Math.min(submenuActiveIndex, aggregated.length - 1))
             const chosen = aggregated[idx]
@@ -1085,7 +1179,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       if (controlledValue !== undefined) onControlledChange?.(next)
       else setInternalMessage(next)
       requestAnimationFrame(() => {
-        const caretPos = (before + `@${label} `).length
+        const caretPos = `${before}@${label} `.length
         textarea.setSelectionRange(caretPos, caretPos)
         textarea.focus()
       })
@@ -1122,7 +1216,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       const token = `@${label}`
       if (!replaceActiveMentionWith(label)) insertAtCursor(`${token} `)
       setSelectedContexts((prev) => {
-        if (prev.some((c) => c.kind === 'knowledge' && (c as any).knowledgeId === kb.id)) return prev
+        if (prev.some((c) => c.kind === 'knowledge' && (c as any).knowledgeId === kb.id))
+          return prev
         return [...prev, { kind: 'knowledge', knowledgeId: kb.id, label } as any]
       })
       setShowMentionMenu(false)
@@ -1146,7 +1241,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       const token = `@${label}`
       if (!replaceActiveMentionWith(label)) insertAtCursor(`${token} `)
       setSelectedContexts((prev) => {
-        if (prev.some((c) => c.kind === 'templates' && (c as any).templateId === tpl.id)) return prev
+        if (prev.some((c) => c.kind === 'templates' && (c as any).templateId === tpl.id))
+          return prev
         return [...prev, { kind: 'templates', templateId: tpl.id, label } as any]
       })
       setShowMentionMenu(false)
@@ -1501,10 +1597,10 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           <div className='relative'>
             {/* Highlight overlay */}
             <div className='pointer-events-none absolute inset-0 z-[1] px-[2px] py-1'>
-              <pre className='whitespace-pre-wrap font-sans text-sm leading-[1.25rem] text-foreground'>
+              <pre className='whitespace-pre-wrap font-sans text-foreground text-sm leading-[1.25rem]'>
                 {(() => {
                   const elements: React.ReactNode[] = []
-                  let remaining = message
+                  const remaining = message
                   const contexts = selectedContexts
                   if (contexts.length === 0 || !remaining) return remaining
                   // Build regex for all labels
@@ -1521,7 +1617,10 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                     if (before) elements.push(before)
                     const mentionText = match[0]
                     elements.push(
-                      <span key={`${mentionText}-${i}-${lastIndex}`} className='rounded-[6px] bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)]'>
+                      <span
+                        key={`${mentionText}-${i}-${lastIndex}`}
+                        className='rounded-[6px] bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)]'
+                      >
                         {mentionText}
                       </span>
                     )
@@ -1543,7 +1642,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
               placeholder={isDragging ? 'Drop files here...' : effectivePlaceholder}
               disabled={disabled}
               rows={1}
-              className='relative z-[2] mb-2 min-h-[32px] w-full resize-none overflow-y-auto overflow-x-hidden border-0 bg-transparent px-[2px] py-1 text-transparent caret-foreground focus-visible:ring-0 focus-visible:ring-offset-0 font-sans text-sm leading-[1.25rem]'
+              className='relative z-[2] mb-2 min-h-[32px] w-full resize-none overflow-y-auto overflow-x-hidden border-0 bg-transparent px-[2px] py-1 font-sans text-sm text-transparent leading-[1.25rem] caret-foreground focus-visible:ring-0 focus-visible:ring-offset-0'
               style={{ height: 'auto' }}
             />
             {showMentionMenu && (
@@ -1551,8 +1650,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                 <div
                   ref={mentionMenuRef}
                   className={cn(
-                    'absolute left-0 bottom-full z-50 mb-1 rounded-[8px] border bg-popover p-1 text-foreground shadow-md max-h-64 overflow-hidden flex flex-col',
-                    openSubmenuFor === 'Blocks' ? 'w-80' : openSubmenuFor === 'Templates' ? 'w-96' : 'w-56'
+                    'absolute bottom-full left-0 z-50 mb-1 flex max-h-64 flex-col overflow-hidden rounded-[8px] border bg-popover p-1 text-foreground shadow-md',
+                    openSubmenuFor === 'Blocks'
+                      ? 'w-80'
+                      : openSubmenuFor === 'Templates'
+                        ? 'w-96'
+                        : 'w-56'
                   )}
                 >
                   {openSubmenuFor ? (
@@ -1561,23 +1664,31 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         {openSubmenuFor === 'Chats'
                           ? 'Chats'
                           : openSubmenuFor === 'Workflows'
-                          ? 'Workflows'
-                          : openSubmenuFor === 'Knowledge'
-                          ? 'Knowledge Bases'
-                          : openSubmenuFor === 'Blocks'
-                          ? 'Blocks'
-                          : 'Templates'}
+                            ? 'Workflows'
+                            : openSubmenuFor === 'Knowledge'
+                              ? 'Knowledge Bases'
+                              : openSubmenuFor === 'Blocks'
+                                ? 'Blocks'
+                                : 'Templates'}
                       </div>
                       <div ref={menuListRef} className='flex-1 overflow-auto overscroll-contain'>
                         {isSubmenu('Chats') && (
                           <>
                             {isLoadingPastChats ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>Loading...</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                Loading...
+                              </div>
                             ) : pastChats.length === 0 ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>No past chats</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                No past chats
+                              </div>
                             ) : (
                               pastChats
-                                .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(getSubmenuQuery().toLowerCase()))
+                                .filter((c) =>
+                                  (c.title || 'Untitled Chat')
+                                    .toLowerCase()
+                                    .includes(getSubmenuQuery().toLowerCase())
+                                )
                                 .map((chat, idx) => (
                                   <div
                                     key={chat.id}
@@ -1595,9 +1706,14 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                     }}
                                   >
                                     <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
-                                      <Bot className='h-3.5 w-3.5 text-muted-foreground' strokeWidth={1.5} />
+                                      <Bot
+                                        className='h-3.5 w-3.5 text-muted-foreground'
+                                        strokeWidth={1.5}
+                                      />
                                     </div>
-                                    <span className='truncate'>{chat.title || 'Untitled Chat'}</span>
+                                    <span className='truncate'>
+                                      {chat.title || 'Untitled Chat'}
+                                    </span>
                                   </div>
                                 ))
                             )}
@@ -1606,12 +1722,20 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         {isSubmenu('Workflows') && (
                           <>
                             {isLoadingWorkflows ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>Loading...</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                Loading...
+                              </div>
                             ) : workflows.length === 0 ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>No workflows</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                No workflows
+                              </div>
                             ) : (
                               workflows
-                                .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(getSubmenuQuery().toLowerCase()))
+                                .filter((w) =>
+                                  (w.name || 'Untitled Workflow')
+                                    .toLowerCase()
+                                    .includes(getSubmenuQuery().toLowerCase())
+                                )
                                 .map((wf, idx) => (
                                   <div
                                     key={wf.id}
@@ -1632,7 +1756,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                       className='h-3.5 w-3.5 flex-shrink-0 rounded'
                                       style={{ backgroundColor: wf.color || '#3972F6' }}
                                     />
-                                    <span className='truncate'>{wf.name || 'Untitled Workflow'}</span>
+                                    <span className='truncate'>
+                                      {wf.name || 'Untitled Workflow'}
+                                    </span>
                                   </div>
                                 ))
                             )}
@@ -1641,12 +1767,20 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         {isSubmenu('Knowledge') && (
                           <>
                             {isLoadingKnowledge ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>Loading...</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                Loading...
+                              </div>
                             ) : knowledgeBases.length === 0 ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>No knowledge bases</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                No knowledge bases
+                              </div>
                             ) : (
                               knowledgeBases
-                                .filter((k) => (k.name || 'Untitled').toLowerCase().includes(getSubmenuQuery().toLowerCase()))
+                                .filter((k) =>
+                                  (k.name || 'Untitled')
+                                    .toLowerCase()
+                                    .includes(getSubmenuQuery().toLowerCase())
+                                )
                                 .map((kb, idx) => (
                                   <div
                                     key={kb.id}
@@ -1673,12 +1807,20 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         {isSubmenu('Blocks') && (
                           <>
                             {isLoadingBlocks ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>Loading...</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                Loading...
+                              </div>
                             ) : blocksList.length === 0 ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>No blocks found</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                No blocks found
+                              </div>
                             ) : (
                               blocksList
-                                .filter((b) => (b.name || b.id).toLowerCase().includes(getSubmenuQuery().toLowerCase()))
+                                .filter((b) =>
+                                  (b.name || b.id)
+                                    .toLowerCase()
+                                    .includes(getSubmenuQuery().toLowerCase())
+                                )
                                 .map((blk, idx) => (
                                   <div
                                     key={blk.id}
@@ -1700,7 +1842,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                       style={{ backgroundColor: blk.bgColor || '#6B7280' }}
                                     >
                                       {blk.iconComponent && (
-                                        <blk.iconComponent className='text-white !h-3 !w-3' />
+                                        <blk.iconComponent className='!h-3 !w-3 text-white' />
                                       )}
                                     </div>
                                     <span className='truncate'>{blk.name || blk.id}</span>
@@ -1712,12 +1854,20 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         {isSubmenu('Templates') && (
                           <>
                             {isLoadingTemplates ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>Loading...</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                Loading...
+                              </div>
                             ) : templatesList.length === 0 ? (
-                              <div className='px-2 py-2 text-muted-foreground text-sm'>No templates found</div>
+                              <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                No templates found
+                              </div>
                             ) : (
                               templatesList
-                                .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(getSubmenuQuery().toLowerCase()))
+                                .filter((t) =>
+                                  (t.name || 'Untitled Template')
+                                    .toLowerCase()
+                                    .includes(getSubmenuQuery().toLowerCase())
+                                )
                                 .map((tpl, idx) => (
                                   <div
                                     key={tpl.id}
@@ -1734,7 +1884,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                       setSubmenuQueryStart(null)
                                     }}
                                   >
-                                    <div className='flex h-4 w-4 items-center justify-center'>★</div>
+                                    <div className='flex h-4 w-4 items-center justify-center'>
+                                      ★
+                                    </div>
                                     <span className='truncate'>{tpl.name}</span>
                                     <span className='ml-auto text-muted-foreground text-xs'>
                                       {tpl.stars}
@@ -1749,38 +1901,76 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                   ) : (
                     <>
                       {(() => {
-                        const q = (getActiveMentionQueryAtPosition(getCaretPos())?.query || '').toLowerCase()
-                        const filtered = mentionOptions.filter((label) => label.toLowerCase().includes(q))
+                        const q = (
+                          getActiveMentionQueryAtPosition(getCaretPos())?.query || ''
+                        ).toLowerCase()
+                        const filtered = mentionOptions.filter((label) =>
+                          label.toLowerCase().includes(q)
+                        )
                         if (q.length > 0 && filtered.length === 0) {
                           // Aggregated search view
                           const aggregated = [
                             ...workflows
-                              .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
-                              .map((w) => ({ type: 'Workflows' as const, id: w.id, value: w, onClick: () => insertWorkflowMention(w) })),
+                              .filter((w) =>
+                                (w.name || 'Untitled Workflow').toLowerCase().includes(q)
+                              )
+                              .map((w) => ({
+                                type: 'Workflows' as const,
+                                id: w.id,
+                                value: w,
+                                onClick: () => insertWorkflowMention(w),
+                              })),
                             ...blocksList
                               .filter((b) => (b.name || b.id).toLowerCase().includes(q))
-                              .map((b) => ({ type: 'Blocks' as const, id: b.id, value: b, onClick: () => insertBlockMention(b) })),
+                              .map((b) => ({
+                                type: 'Blocks' as const,
+                                id: b.id,
+                                value: b,
+                                onClick: () => insertBlockMention(b),
+                              })),
                             ...knowledgeBases
                               .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
-                              .map((k) => ({ type: 'Knowledge' as const, id: k.id, value: k, onClick: () => insertKnowledgeMention(k) })),
+                              .map((k) => ({
+                                type: 'Knowledge' as const,
+                                id: k.id,
+                                value: k,
+                                onClick: () => insertKnowledgeMention(k),
+                              })),
                             ...templatesList
-                              .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
-                              .map((t) => ({ type: 'Templates' as const, id: t.id, value: t, onClick: () => insertTemplateMention(t) })),
+                              .filter((t) =>
+                                (t.name || 'Untitled Template').toLowerCase().includes(q)
+                              )
+                              .map((t) => ({
+                                type: 'Templates' as const,
+                                id: t.id,
+                                value: t,
+                                onClick: () => insertTemplateMention(t),
+                              })),
                             ...pastChats
                               .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
-                              .map((c) => ({ type: 'Chats' as const, id: c.id, value: c, onClick: () => insertPastChatMention(c) })),
+                              .map((c) => ({
+                                type: 'Chats' as const,
+                                id: c.id,
+                                value: c,
+                                onClick: () => insertPastChatMention(c),
+                              })),
                           ]
                           return (
-                            <div ref={menuListRef} className='flex-1 overflow-auto overscroll-contain'>
+                            <div
+                              ref={menuListRef}
+                              className='flex-1 overflow-auto overscroll-contain'
+                            >
                               {aggregated.length === 0 ? (
-                                <div className='px-2 py-2 text-muted-foreground text-sm'>No matches</div>
+                                <div className='px-2 py-2 text-muted-foreground text-sm'>
+                                  No matches
+                                </div>
                               ) : (
                                 aggregated.map((item, idx) => (
                                   <div
                                     key={`${item.type}-${item.id}`}
                                     data-idx={idx}
                                     className={cn(
-                                      'flex items-center gap-2 cursor-default rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
+                                      'flex cursor-default items-center gap-2 rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
                                       submenuActiveIndex === idx && 'bg-muted'
                                     )}
                                     role='menuitem'
@@ -1791,40 +1981,62 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                     {item.type === 'Chats' ? (
                                       <>
                                         <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
-                                          <Bot className='h-3.5 w-3.5 text-muted-foreground' strokeWidth={1.5} />
+                                          <Bot
+                                            className='h-3.5 w-3.5 text-muted-foreground'
+                                            strokeWidth={1.5}
+                                          />
                                         </div>
-                                        <span className='truncate'>{(item.value as any).title || 'Untitled Chat'}</span>
+                                        <span className='truncate'>
+                                          {(item.value as any).title || 'Untitled Chat'}
+                                        </span>
                                       </>
                                     ) : item.type === 'Workflows' ? (
                                       <>
                                         <div
                                           className='h-3.5 w-3.5 flex-shrink-0 rounded'
-                                          style={{ backgroundColor: (item.value as any).color || '#3972F6' }}
+                                          style={{
+                                            backgroundColor: (item.value as any).color || '#3972F6',
+                                          }}
                                         />
-                                        <span className='truncate'>{(item.value as any).name || 'Untitled Workflow'}</span>
+                                        <span className='truncate'>
+                                          {(item.value as any).name || 'Untitled Workflow'}
+                                        </span>
                                       </>
                                     ) : item.type === 'Knowledge' ? (
                                       <>
                                         <LibraryBig className='h-3.5 w-3.5 text-muted-foreground' />
-                                        <span className='truncate'>{(item.value as any).name || 'Untitled'}</span>
+                                        <span className='truncate'>
+                                          {(item.value as any).name || 'Untitled'}
+                                        </span>
                                       </>
                                     ) : item.type === 'Blocks' ? (
                                       <>
                                         <div
                                           className='relative flex h-4 w-4 items-center justify-center rounded-[3px]'
-                                          style={{ backgroundColor: (item.value as any).bgColor || '#6B7280' }}
+                                          style={{
+                                            backgroundColor:
+                                              (item.value as any).bgColor || '#6B7280',
+                                          }}
                                         >
                                           {(() => {
                                             const Icon = (item.value as any).iconComponent
-                                            return Icon ? <Icon className='text-white !h-3 !w-3' /> : null
+                                            return Icon ? (
+                                              <Icon className='!h-3 !w-3 text-white' />
+                                            ) : null
                                           })()}
                                         </div>
-                                        <span className='truncate'>{(item.value as any).name || (item.value as any).id}</span>
+                                        <span className='truncate'>
+                                          {(item.value as any).name || (item.value as any).id}
+                                        </span>
                                       </>
                                     ) : (
                                       <>
-                                        <div className='flex h-4 w-4 items-center justify-center'>★</div>
-                                        <span className='truncate'>{(item.value as any).name || 'Untitled Template'}</span>
+                                        <div className='flex h-4 w-4 items-center justify-center'>
+                                          ★
+                                        </div>
+                                        <span className='truncate'>
+                                          {(item.value as any).name || 'Untitled Template'}
+                                        </span>
                                         {typeof (item.value as any).stars === 'number' && (
                                           <span className='ml-auto text-muted-foreground text-xs'>
                                             {(item.value as any).stars}
@@ -1840,13 +2052,16 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         }
                         // Filtered top-level options view
                         return (
-                          <div ref={menuListRef} className='flex-1 overflow-auto overscroll-contain'>
+                          <div
+                            ref={menuListRef}
+                            className='flex-1 overflow-auto overscroll-contain'
+                          >
                             {filtered.map((label, idx) => (
                               <div
                                 key={label}
                                 data-idx={idx}
                                 className={cn(
-                                  'flex items-center justify-between gap-2 cursor-default rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
+                                  'flex cursor-default items-center justify-between gap-2 rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
                                   !inAggregated && mentionActiveIndex === idx && 'bg-muted'
                                 )}
                                 role='menuitem'
@@ -1913,7 +2128,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                               const aq = q
                               const aggregated = [
                                 ...workflows
-                                  .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(aq))
+                                  .filter((w) =>
+                                    (w.name || 'Untitled Workflow').toLowerCase().includes(aq)
+                                  )
                                   .map((w) => ({ type: 'Workflows' as const, value: w })),
                                 ...blocksList
                                   .filter((b) => (b.name || b.id).toLowerCase().includes(aq))
@@ -1922,23 +2139,29 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                   .filter((k) => (k.name || 'Untitled').toLowerCase().includes(aq))
                                   .map((k) => ({ type: 'Knowledge' as const, value: k })),
                                 ...templatesList
-                                  .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(aq))
+                                  .filter((t) =>
+                                    (t.name || 'Untitled Template').toLowerCase().includes(aq)
+                                  )
                                   .map((t) => ({ type: 'Templates' as const, value: t })),
                                 ...pastChats
-                                  .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(aq))
+                                  .filter((c) =>
+                                    (c.title || 'Untitled Chat').toLowerCase().includes(aq)
+                                  )
                                   .map((c) => ({ type: 'Chats' as const, value: c })),
                               ]
                               if (!aq || aq.length === 0 || aggregated.length === 0) return null
                               return (
                                 <>
                                   <div className='my-1 h-px bg-border/70' />
-                                  <div className='px-2 py-1 text-[11px] text-muted-foreground'>Matches</div>
+                                  <div className='px-2 py-1 text-[11px] text-muted-foreground'>
+                                    Matches
+                                  </div>
                                   {aggregated.map((item, idx) => (
                                     <div
                                       key={`${item.type}-${(item.value as any).id}`}
                                       data-idx={filtered.length + idx}
                                       className={cn(
-                                        'flex items-center gap-2 cursor-default rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
+                                        'flex cursor-default items-center gap-2 rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
                                         inAggregated && submenuActiveIndex === idx && 'bg-muted'
                                       )}
                                       role='menuitem'
@@ -1948,50 +2171,78 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                         setSubmenuActiveIndex(idx)
                                       }}
                                       onClick={() => {
-                                        if (item.type === 'Chats') insertPastChatMention(item.value as any)
-                                        else if (item.type === 'Workflows') insertWorkflowMention(item.value as any)
-                                        else if (item.type === 'Knowledge') insertKnowledgeMention(item.value as any)
-                                        else if (item.type === 'Blocks') insertBlockMention(item.value as any)
-                                        else if (item.type === 'Templates') insertTemplateMention(item.value as any)
+                                        if (item.type === 'Chats')
+                                          insertPastChatMention(item.value as any)
+                                        else if (item.type === 'Workflows')
+                                          insertWorkflowMention(item.value as any)
+                                        else if (item.type === 'Knowledge')
+                                          insertKnowledgeMention(item.value as any)
+                                        else if (item.type === 'Blocks')
+                                          insertBlockMention(item.value as any)
+                                        else if (item.type === 'Templates')
+                                          insertTemplateMention(item.value as any)
                                       }}
                                     >
                                       {item.type === 'Chats' ? (
                                         <>
                                           <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
-                                            <Bot className='h-3.5 w-3.5 text-muted-foreground' strokeWidth={1.5} />
+                                            <Bot
+                                              className='h-3.5 w-3.5 text-muted-foreground'
+                                              strokeWidth={1.5}
+                                            />
                                           </div>
-                                          <span className='truncate'>{(item.value as any).title || 'Untitled Chat'}</span>
+                                          <span className='truncate'>
+                                            {(item.value as any).title || 'Untitled Chat'}
+                                          </span>
                                         </>
                                       ) : item.type === 'Workflows' ? (
                                         <>
                                           <div
                                             className='h-3.5 w-3.5 flex-shrink-0 rounded'
-                                            style={{ backgroundColor: (item.value as any).color || '#3972F6' }}
+                                            style={{
+                                              backgroundColor:
+                                                (item.value as any).color || '#3972F6',
+                                            }}
                                           />
-                                          <span className='truncate'>{(item.value as any).name || 'Untitled Workflow'}</span>
+                                          <span className='truncate'>
+                                            {(item.value as any).name || 'Untitled Workflow'}
+                                          </span>
                                         </>
                                       ) : item.type === 'Knowledge' ? (
                                         <>
                                           <LibraryBig className='h-3.5 w-3.5 text-muted-foreground' />
-                                          <span className='truncate'>{(item.value as any).name || 'Untitled'}</span>
+                                          <span className='truncate'>
+                                            {(item.value as any).name || 'Untitled'}
+                                          </span>
                                         </>
                                       ) : item.type === 'Blocks' ? (
                                         <>
                                           <div
                                             className='relative flex h-4 w-4 items-center justify-center rounded-[3px]'
-                                            style={{ backgroundColor: (item.value as any).bgColor || '#6B7280' }}
+                                            style={{
+                                              backgroundColor:
+                                                (item.value as any).bgColor || '#6B7280',
+                                            }}
                                           >
                                             {(() => {
                                               const Icon = (item.value as any).iconComponent
-                                              return Icon ? <Icon className='text-white !h-3 !w-3' /> : null
+                                              return Icon ? (
+                                                <Icon className='!h-3 !w-3 text-white' />
+                                              ) : null
                                             })()}
                                           </div>
-                                          <span className='truncate'>{(item.value as any).name || (item.value as any).id}</span>
+                                          <span className='truncate'>
+                                            {(item.value as any).name || (item.value as any).id}
+                                          </span>
                                         </>
                                       ) : (
                                         <>
-                                          <div className='flex h-4 w-4 items-center justify-center'>★</div>
-                                          <span className='truncate'>{(item.value as any).name || 'Untitled Template'}</span>
+                                          <div className='flex h-4 w-4 items-center justify-center'>
+                                            ★
+                                          </div>
+                                          <span className='truncate'>
+                                            {(item.value as any).name || 'Untitled Template'}
+                                          </span>
                                           {typeof (item.value as any).stars === 'number' && (
                                             <span className='ml-auto text-muted-foreground text-xs'>
                                               {(item.value as any).stars}
