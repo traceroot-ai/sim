@@ -431,11 +431,12 @@ function createUserMessage(
     timestamp: new Date().toISOString(),
     ...(fileAttachments && fileAttachments.length > 0 && { fileAttachments }),
     ...(contexts && contexts.length > 0 && { contexts }),
-    ...(contexts && contexts.length > 0 && {
-      contentBlocks: [
-        { type: 'contexts', contexts: contexts as any, timestamp: Date.now() },
-      ] as any,
-    }),
+    ...(contexts &&
+      contexts.length > 0 && {
+        contentBlocks: [
+          { type: 'contexts', contexts: contexts as any, timestamp: Date.now() },
+        ] as any,
+      }),
   }
 }
 

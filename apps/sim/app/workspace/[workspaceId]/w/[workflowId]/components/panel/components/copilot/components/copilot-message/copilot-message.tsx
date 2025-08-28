@@ -1,8 +1,21 @@
 'use client'
 
 import { type FC, memo, useEffect, useMemo, useState } from 'react'
-import { Check, Clipboard, Loader2, RotateCcw, ThumbsDown, ThumbsUp, X } from 'lucide-react'
-import { Bot, Workflow, Blocks, LibraryBig, Shapes, Info } from 'lucide-react'
+import {
+  Blocks,
+  Bot,
+  Check,
+  Clipboard,
+  Info,
+  LibraryBig,
+  Loader2,
+  RotateCcw,
+  Shapes,
+  ThumbsDown,
+  ThumbsUp,
+  Workflow,
+  X,
+} from 'lucide-react'
 import { InlineToolCall } from '@/lib/copilot/inline-tool-call'
 import { createLogger } from '@/lib/logs/console/logger'
 import {
@@ -378,13 +391,15 @@ const CopilotMessage: FC<CopilotMessageProps> = memo(
                       : []
                     const allContexts = direct.length > 0 ? direct : fromBlock
                     const MAX_VISIBLE = 4
-                    const visible = showAllContexts ? allContexts : allContexts.slice(0, MAX_VISIBLE)
+                    const visible = showAllContexts
+                      ? allContexts
+                      : allContexts.slice(0, MAX_VISIBLE)
                     return (
                       <>
                         {visible.map((ctx: any, idx: number) => (
                           <span
                             key={`ctx-${idx}-${ctx?.label || ctx?.kind}`}
-                            className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)] px-1.5 py-0.5 text-foreground text-[11px]'
+                            className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)] px-1.5 py-0.5 text-[11px] text-foreground'
                             title={ctx?.label || ctx?.kind}
                           >
                             {ctx?.kind === 'past_chat' ? (
@@ -400,17 +415,25 @@ const CopilotMessage: FC<CopilotMessageProps> = memo(
                             ) : (
                               <Info className='h-3 w-3 text-muted-foreground' />
                             )}
-                            <span className='max-w-[140px] truncate'>{ctx?.label || ctx?.kind}</span>
+                            <span className='max-w-[140px] truncate'>
+                              {ctx?.label || ctx?.kind}
+                            </span>
                           </span>
                         ))}
                         {allContexts.length > MAX_VISIBLE && (
                           <button
                             type='button'
                             onClick={() => setShowAllContexts((v) => !v)}
-                            className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_10%,transparent)] px-1.5 py-0.5 text-foreground text-[11px] hover:bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)]'
-                            title={showAllContexts ? 'Show less' : `Show ${allContexts.length - MAX_VISIBLE} more`}
+                            className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_10%,transparent)] px-1.5 py-0.5 text-[11px] text-foreground hover:bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)]'
+                            title={
+                              showAllContexts
+                                ? 'Show less'
+                                : `Show ${allContexts.length - MAX_VISIBLE} more`
+                            }
                           >
-                            {showAllContexts ? 'Show less' : `+${allContexts.length - MAX_VISIBLE} more`}
+                            {showAllContexts
+                              ? 'Show less'
+                              : `+${allContexts.length - MAX_VISIBLE} more`}
                           </button>
                         )}
                       </>

@@ -402,11 +402,10 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
         ...(fileAttachments && fileAttachments.length > 0 && { fileAttachments }),
         ...(Array.isArray(contexts) && contexts.length > 0 && { contexts }),
-        ...(Array.isArray(contexts) && contexts.length > 0 && {
-          contentBlocks: [
-            { type: 'contexts', contexts: contexts as any, timestamp: Date.now() },
-          ],
-        }),
+        ...(Array.isArray(contexts) &&
+          contexts.length > 0 && {
+            contentBlocks: [{ type: 'contexts', contexts: contexts as any, timestamp: Date.now() }],
+          }),
       }
 
       // Create a pass-through stream that captures the response
@@ -741,11 +740,10 @@ export async function POST(req: NextRequest) {
         timestamp: new Date().toISOString(),
         ...(fileAttachments && fileAttachments.length > 0 && { fileAttachments }),
         ...(Array.isArray(contexts) && contexts.length > 0 && { contexts }),
-        ...(Array.isArray(contexts) && contexts.length > 0 && {
-          contentBlocks: [
-            { type: 'contexts', contexts: contexts as any, timestamp: Date.now() },
-          ],
-        }),
+        ...(Array.isArray(contexts) &&
+          contexts.length > 0 && {
+            contentBlocks: [{ type: 'contexts', contexts: contexts as any, timestamp: Date.now() }],
+          }),
       }
 
       const assistantMessage = {
