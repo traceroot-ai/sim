@@ -514,6 +514,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           setSubmenuQueryStart(null)
         } else {
           setShowMentionMenu(false)
+          // Reset all mention states so @ is treated as regular text
+          setOpenSubmenuFor(null)
+          setSubmenuQueryStart(null)
+          setMentionActiveIndex(0)
+          setSubmenuActiveIndex(0)
+          setInAggregated(false)
         }
         return
       }
@@ -964,7 +970,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         }
       }
       const segment = before.slice(atIndex + 1)
-      // Do NOT close on whitespace; keep the popup open as long as '@' exists
+      // Close the popup if user types space immediately after @ (just "@ " with nothing between)
+      // This means they want to use @ as a regular character, not as a mention trigger
+      if (segment.length > 0 && /^\s/.test(segment)) {
+        return null
+      }
+      // Keep the popup open for valid queries
       return { query: segment, start: atIndex, end: pos }
     }
 
