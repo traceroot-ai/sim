@@ -170,10 +170,33 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
       try {
         const { activeWorkflowId } = useWorkflowRegistry.getState()
         if (activeWorkflowId) {
-          const { loadVariables } = useVariablesStore.getState()
-          await loadVariables(String(activeWorkflowId))
+          // Fetch the updated variables from the API
+          const refreshRes = await fetch(`/api/workflows/${activeWorkflowId}/variables`, {
+            method: 'GET',
+          })
+
+          if (refreshRes.ok) {
+            const refreshJson = await refreshRes.json()
+            const updatedVarsRecord = (refreshJson?.data as Record<string, any>) || {}
+
+            // Update the variables store with the fresh data
+            useVariablesStore.setState((state) => {
+              // Remove old variables for this workflow
+              const withoutWorkflow = Object.fromEntries(
+                Object.entries(state.variables).filter(([, v]) => v.workflowId !== activeWorkflowId)
+              )
+              // Add the updated variables
+              return {
+                variables: { ...withoutWorkflow, ...updatedVarsRecord },
+              }
+            })
+
+            logger.info('Refreshed variables in store', { workflowId: activeWorkflowId })
+          }
         }
-      } catch {}
+      } catch (refreshError) {
+        logger.warn('Failed to refresh variables in store', { error: refreshError })
+      }
 
       await this.markToolComplete(200, 'Workflow variables updated', { variables: byName })
       this.setState(ClientToolCallState.success)
