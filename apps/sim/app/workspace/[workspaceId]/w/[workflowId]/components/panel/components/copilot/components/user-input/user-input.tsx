@@ -95,7 +95,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       disabled = false,
       isLoading = false,
       isAborting = false,
-      placeholder = 'How can I help you today?',
+      placeholder = 'Build, edit, debug workflows',
       className,
       mode = 'agent',
       onModeChange,
@@ -119,6 +119,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
     const mentionOptions = ['Chats', 'Workflows', 'Blocks', 'Knowledge', 'Templates']
     const [openSubmenuFor, setOpenSubmenuFor] = useState<string | null>(null)
     const [submenuActiveIndex, setSubmenuActiveIndex] = useState(0)
+    const [inAggregated, setInAggregated] = useState(false)
     const isSubmenu = (
       v: 'Chats' | 'Workflows' | 'Knowledge' | 'Blocks' | 'Templates'
     ) => openSubmenuFor === v
@@ -525,6 +526,15 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           ? mentionOptions.filter((o) => o.toLowerCase().includes(mainQ))
           : []
         const isAggregate = !openSubmenuFor && mainQ.length > 0 && filteredMain.length === 0
+        const aggregatedList = !openSubmenuFor && mainQ.length > 0
+          ? [
+              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(mainQ)).map((c) => ({ type: 'Chats' as const, value: c })),
+              ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(mainQ)).map((w) => ({ type: 'Workflows' as const, value: w })),
+              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(mainQ)).map((k) => ({ type: 'Knowledge' as const, value: k })),
+              ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(mainQ)).map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(mainQ)).map((t) => ({ type: 'Templates' as const, value: t })),
+            ]
+          : []
 
         if (openSubmenuFor === 'Chats' && pastChats.length > 0) {
           const q = getSubmenuQuery().toLowerCase()
@@ -595,6 +605,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
             ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
           ]
+          setInAggregated(true)
           setSubmenuActiveIndex((prev) => {
             const last = Math.max(0, aggregated.length - 1)
             let next = prev
@@ -605,20 +616,74 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
             return next
           })
         } else {
-          setMentionActiveIndex((prev) => {
-            const last = Math.max(0, filteredMain.length - 1)
-            let next = prev
-            if (filteredMain.length === 0) next = 0
-            else if (e.key === 'ArrowDown') next = prev >= last ? 0 : prev + 1
-            else next = prev <= 0 ? last : prev - 1
-            requestAnimationFrame(() => scrollActiveItemIntoView(next))
-            return next
-          })
+          // Navigate through main options, then into aggregated matches
+          if (!inAggregated) {
+            const lastMain = Math.max(0, filteredMain.length - 1)
+            if (filteredMain.length === 0) {
+              // jump straight into aggregated if any
+              if (aggregatedList.length > 0) {
+                setInAggregated(true)
+                setSubmenuActiveIndex(0)
+                requestAnimationFrame(() => scrollActiveItemIntoView(0))
+              }
+            } else if (e.key === 'ArrowDown' && mentionActiveIndex >= lastMain) {
+              if (aggregatedList.length > 0) {
+                setInAggregated(true)
+                setSubmenuActiveIndex(0)
+                requestAnimationFrame(() => scrollActiveItemIntoView(0))
+              } else {
+                setMentionActiveIndex(0)
+                requestAnimationFrame(() => scrollActiveItemIntoView(0))
+              }
+            } else if (e.key === 'ArrowUp' && mentionActiveIndex <= 0 && aggregatedList.length > 0) {
+              setInAggregated(true)
+              setSubmenuActiveIndex(Math.max(0, aggregatedList.length - 1))
+              requestAnimationFrame(() => scrollActiveItemIntoView(Math.max(0, aggregatedList.length - 1)))
+            } else {
+              setMentionActiveIndex((prev) => {
+                const last = lastMain
+                let next = prev
+                if (filteredMain.length === 0) next = 0
+                else if (e.key === 'ArrowDown') next = prev >= last ? last : prev + 1
+                else next = prev <= 0 ? 0 : prev - 1
+                requestAnimationFrame(() => scrollActiveItemIntoView(next))
+                return next
+              })
+            }
+          } else {
+            // inside aggregated list
+            setSubmenuActiveIndex((prev) => {
+              const last = Math.max(0, aggregatedList.length - 1)
+              let next = prev
+              if (aggregatedList.length === 0) next = 0
+              else if (e.key === 'ArrowDown') {
+                if (prev >= last) {
+                  // wrap to main
+                  setInAggregated(false)
+                  requestAnimationFrame(() => scrollActiveItemIntoView(0))
+                  return prev
+                }
+                next = prev + 1
+              } else {
+                if (prev <= 0) {
+                  // move to main last
+                  setInAggregated(false)
+                  setMentionActiveIndex(Math.max(0, filteredMain.length - 1))
+                  requestAnimationFrame(() => scrollActiveItemIntoView(Math.max(0, filteredMain.length - 1)))
+                  return prev
+                }
+                next = prev - 1
+              }
+              requestAnimationFrame(() => scrollActiveItemIntoView(next))
+              return next
+            })
+          }
         }
         return
       }
       if (showMentionMenu && e.key === 'ArrowRight') {
         e.preventDefault()
+        if (inAggregated) return
         const caretPos = getCaretPos()
         const active = getActiveMentionQueryAtPosition(caretPos)
         const mainQ = (active?.query || '').toLowerCase()
@@ -662,6 +727,11 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           e.preventDefault()
           setOpenSubmenuFor(null)
           setSubmenuQueryStart(null)
+          return
+        }
+        if (inAggregated) {
+          e.preventDefault()
+          setInAggregated(false)
           return
         }
       }
@@ -827,7 +897,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
               insertTemplateMention(chosen)
               setSubmenuQueryStart(null)
             }
-          } else if (isAggregate) {
+          } else if (isAggregate || inAggregated) {
             const q = mainQ
             const aggregated = [
               ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
@@ -916,6 +986,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       const active = getActiveMentionQueryAtPosition(caret, newValue)
       if (active) {
         setShowMentionMenu(true)
+        setInAggregated(false)
         if (openSubmenuFor) {
           setSubmenuActiveIndex(0)
           requestAnimationFrame(() => scrollActiveItemIntoView(0))
@@ -1183,6 +1254,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
     useEffect(() => {
       if (!showMentionMenu || openSubmenuFor) {
         setAggregatedActive(false)
+        setInAggregated(false)
         return
       }
       const q = (getActiveMentionQueryAtPosition(getCaretPos())?.query || '').trim().toLowerCase()
@@ -1203,6 +1275,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
     // When switching into a submenu, select the first item and scroll to it
     useEffect(() => {
       if (openSubmenuFor) {
+        setInAggregated(false)
         setSubmenuActiveIndex(0)
         requestAnimationFrame(() => scrollActiveItemIntoView(0))
       }
@@ -1652,19 +1725,19 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                           const aggregated = [
                             ...pastChats
                               .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
-                              .map((c) => ({ type: 'Chats' as const, id: c.id, label: c.title || 'Untitled Chat', onClick: () => insertPastChatMention(c) })),
+                              .map((c) => ({ type: 'Chats' as const, id: c.id, value: c, onClick: () => insertPastChatMention(c) })),
                             ...workflows
                               .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
-                              .map((w) => ({ type: 'Workflows' as const, id: w.id, label: w.name || 'Untitled Workflow', onClick: () => insertWorkflowMention(w) })),
+                              .map((w) => ({ type: 'Workflows' as const, id: w.id, value: w, onClick: () => insertWorkflowMention(w) })),
                             ...knowledgeBases
                               .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
-                              .map((k) => ({ type: 'Knowledge' as const, id: k.id, label: k.name || 'Untitled', onClick: () => insertKnowledgeMention(k) })),
+                              .map((k) => ({ type: 'Knowledge' as const, id: k.id, value: k, onClick: () => insertKnowledgeMention(k) })),
                             ...blocksList
                               .filter((b) => (b.name || b.id).toLowerCase().includes(q))
-                              .map((b) => ({ type: 'Blocks' as const, id: b.id, label: b.name || b.id, onClick: () => insertBlockMention(b) })),
+                              .map((b) => ({ type: 'Blocks' as const, id: b.id, value: b, onClick: () => insertBlockMention(b) })),
                             ...templatesList
                               .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
-                              .map((t) => ({ type: 'Templates' as const, id: t.id, label: t.name || 'Untitled Template', onClick: () => insertTemplateMention(t) })),
+                              .map((t) => ({ type: 'Templates' as const, id: t.id, value: t, onClick: () => insertTemplateMention(t) })),
                           ]
                           return (
                             <div ref={menuListRef} className='flex-1 overflow-auto overscroll-contain'>
@@ -1684,8 +1757,50 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                     onMouseEnter={() => setSubmenuActiveIndex(idx)}
                                     onClick={() => item.onClick()}
                                   >
-                                    <span className='text-muted-foreground text-[11px] w-20 shrink-0'>{item.type}</span>
-                                    <span className='truncate'>{item.label}</span>
+                                    {item.type === 'Chats' ? (
+                                      <>
+                                        <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
+                                          <Bot className='h-3.5 w-3.5 text-muted-foreground' strokeWidth={1.5} />
+                                        </div>
+                                        <span className='truncate'>{(item.value as any).title || 'Untitled Chat'}</span>
+                                      </>
+                                    ) : item.type === 'Workflows' ? (
+                                      <>
+                                        <div
+                                          className='h-3.5 w-3.5 flex-shrink-0 rounded'
+                                          style={{ backgroundColor: (item.value as any).color || '#3972F6' }}
+                                        />
+                                        <span className='truncate'>{(item.value as any).name || 'Untitled Workflow'}</span>
+                                      </>
+                                    ) : item.type === 'Knowledge' ? (
+                                      <>
+                                        <LibraryBig className='h-3.5 w-3.5 text-muted-foreground' />
+                                        <span className='truncate'>{(item.value as any).name || 'Untitled'}</span>
+                                      </>
+                                    ) : item.type === 'Blocks' ? (
+                                      <>
+                                        <div
+                                          className='relative flex h-4 w-4 items-center justify-center rounded-[3px]'
+                                          style={{ backgroundColor: (item.value as any).bgColor || '#6B7280' }}
+                                        >
+                                          {(() => {
+                                            const Icon = (item.value as any).iconComponent
+                                            return Icon ? <Icon className='text-white !h-3 !w-3' /> : null
+                                          })()}
+                                        </div>
+                                        <span className='truncate'>{(item.value as any).name || (item.value as any).id}</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className='flex h-4 w-4 items-center justify-center'>★</div>
+                                        <span className='truncate'>{(item.value as any).name || 'Untitled Template'}</span>
+                                        {typeof (item.value as any).stars === 'number' && (
+                                          <span className='ml-auto text-muted-foreground text-xs'>
+                                            {(item.value as any).stars}
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
                                   </div>
                                 ))
                               )}
@@ -1701,11 +1816,14 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                 data-idx={idx}
                                 className={cn(
                                   'flex items-center justify-between gap-2 cursor-default rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
-                                  mentionActiveIndex === idx && 'bg-muted'
+                                  !inAggregated && mentionActiveIndex === idx && 'bg-muted'
                                 )}
                                 role='menuitem'
-                                aria-selected={mentionActiveIndex === idx}
-                                onMouseEnter={() => setMentionActiveIndex(idx)}
+                                aria-selected={!inAggregated && mentionActiveIndex === idx}
+                                onMouseEnter={() => {
+                                  setInAggregated(false)
+                                  setMentionActiveIndex(idx)
+                                }}
                                 onClick={() => {
                                   if (label === 'Chats') {
                                     resetActiveMentionQuery()
@@ -1759,6 +1877,102 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                                 <ChevronRight className='h-3.5 w-3.5 text-muted-foreground' />
                               </div>
                             ))}
+
+                            {(() => {
+                              const aq = q
+                              const aggregated = [
+                                ...pastChats
+                                  .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(aq))
+                                  .map((c) => ({ type: 'Chats' as const, value: c })),
+                                ...workflows
+                                  .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(aq))
+                                  .map((w) => ({ type: 'Workflows' as const, value: w })),
+                                ...knowledgeBases
+                                  .filter((k) => (k.name || 'Untitled').toLowerCase().includes(aq))
+                                  .map((k) => ({ type: 'Knowledge' as const, value: k })),
+                                ...blocksList
+                                  .filter((b) => (b.name || b.id).toLowerCase().includes(aq))
+                                  .map((b) => ({ type: 'Blocks' as const, value: b })),
+                                ...templatesList
+                                  .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(aq))
+                                  .map((t) => ({ type: 'Templates' as const, value: t })),
+                              ]
+                              if (!aq || aq.length === 0 || aggregated.length === 0) return null
+                              return (
+                                <>
+                                  <div className='my-1 h-px bg-border/70' />
+                                  <div className='px-2 py-1 text-[11px] text-muted-foreground'>Matches</div>
+                                  {aggregated.map((item, idx) => (
+                                    <div
+                                      key={`${item.type}-${(item.value as any).id}`}
+                                      data-idx={filtered.length + idx}
+                                      className={cn(
+                                        'flex items-center gap-2 cursor-default rounded-[6px] px-2 py-1.5 text-sm hover:bg-muted/60',
+                                        inAggregated && submenuActiveIndex === idx && 'bg-muted'
+                                      )}
+                                      role='menuitem'
+                                      aria-selected={inAggregated && submenuActiveIndex === idx}
+                                      onMouseEnter={() => {
+                                        setInAggregated(true)
+                                        setSubmenuActiveIndex(idx)
+                                      }}
+                                      onClick={() => {
+                                        if (item.type === 'Chats') insertPastChatMention(item.value as any)
+                                        else if (item.type === 'Workflows') insertWorkflowMention(item.value as any)
+                                        else if (item.type === 'Knowledge') insertKnowledgeMention(item.value as any)
+                                        else if (item.type === 'Blocks') insertBlockMention(item.value as any)
+                                        else if (item.type === 'Templates') insertTemplateMention(item.value as any)
+                                      }}
+                                    >
+                                      {item.type === 'Chats' ? (
+                                        <>
+                                          <div className='flex h-4 w-4 flex-shrink-0 items-center justify-center'>
+                                            <Bot className='h-3.5 w-3.5 text-muted-foreground' strokeWidth={1.5} />
+                                          </div>
+                                          <span className='truncate'>{(item.value as any).title || 'Untitled Chat'}</span>
+                                        </>
+                                      ) : item.type === 'Workflows' ? (
+                                        <>
+                                          <div
+                                            className='h-3.5 w-3.5 flex-shrink-0 rounded'
+                                            style={{ backgroundColor: (item.value as any).color || '#3972F6' }}
+                                          />
+                                          <span className='truncate'>{(item.value as any).name || 'Untitled Workflow'}</span>
+                                        </>
+                                      ) : item.type === 'Knowledge' ? (
+                                        <>
+                                          <LibraryBig className='h-3.5 w-3.5 text-muted-foreground' />
+                                          <span className='truncate'>{(item.value as any).name || 'Untitled'}</span>
+                                        </>
+                                      ) : item.type === 'Blocks' ? (
+                                        <>
+                                          <div
+                                            className='relative flex h-4 w-4 items-center justify-center rounded-[3px]'
+                                            style={{ backgroundColor: (item.value as any).bgColor || '#6B7280' }}
+                                          >
+                                            {(() => {
+                                              const Icon = (item.value as any).iconComponent
+                                              return Icon ? <Icon className='text-white !h-3 !w-3' /> : null
+                                            })()}
+                                          </div>
+                                          <span className='truncate'>{(item.value as any).name || (item.value as any).id}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className='flex h-4 w-4 items-center justify-center'>★</div>
+                                          <span className='truncate'>{(item.value as any).name || 'Untitled Template'}</span>
+                                          {typeof (item.value as any).stars === 'number' && (
+                                            <span className='ml-auto text-muted-foreground text-xs'>
+                                              {(item.value as any).stars}
+                                            </span>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                </>
+                              )
+                            })()}
                           </div>
                         )
                       })()}
