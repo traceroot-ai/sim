@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useParams } from 'next/navigation'
 import {
   ArrowUp,
   AtSign,
@@ -32,6 +31,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import { useParams } from 'next/navigation'
 import {
   Button,
   DropdownMenu,
@@ -222,22 +222,23 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         if (!resp.ok) throw new Error(`Failed to load chats: ${resp.status}`)
         const data = await resp.json()
         const items = Array.isArray(data?.chats) ? data.chats : []
-        
+
         // Filter chats to only show those from workflows in the current workspace
         // First, ensure workflows are loaded
         if (workflows.length === 0) {
           await ensureWorkflowsLoaded()
         }
-        
+
         // Get workflow IDs from the current workspace
-        const workspaceWorkflowIds = new Set(workflows.map(w => w.id))
-        
+        const workspaceWorkflowIds = new Set(workflows.map((w) => w.id))
+
         // Filter chats to only those from workflows in this workspace
-        const workspaceChats = items.filter((c: any) => 
-          !c.workflowId || // Include chats without a workflow (shouldn't happen but defensive)
-          workspaceWorkflowIds.has(c.workflowId) // Include chats from workspace workflows
+        const workspaceChats = items.filter(
+          (c: any) =>
+            !c.workflowId || // Include chats without a workflow (shouldn't happen but defensive)
+            workspaceWorkflowIds.has(c.workflowId) // Include chats from workspace workflows
         )
-        
+
         setPastChats(
           workspaceChats.map((c: any) => ({
             id: c.id,
@@ -261,8 +262,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         const data = await resp.json()
         const items = Array.isArray(data?.data) ? data.data : []
         // Filter workflows by workspace (same as sidebar)
-        const workspaceFiltered = items.filter((w: any) => 
-          w.workspaceId === workspaceId || !w.workspaceId
+        const workspaceFiltered = items.filter(
+          (w: any) => w.workspaceId === workspaceId || !w.workspaceId
         )
         // Sort by last modified/updated (newest first), matching sidebar behavior
         const sorted = [...workspaceFiltered].sort((a: any, b: any) => {
