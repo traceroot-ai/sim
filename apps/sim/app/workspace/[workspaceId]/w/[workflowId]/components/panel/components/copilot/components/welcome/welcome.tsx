@@ -87,7 +87,7 @@ export function CopilotWelcome({ onQuestionClick, mode = 'ask' }: CopilotWelcome
 
         {/* Tips */}
         <div className='mt-6 text-center text-muted-foreground text-[11px]'>
-          <p>Tip: Use <span className='font-medium text-foreground'>@</span> to reference chats, workflows, knowledge, blocks, or templates.</p>
+          <p>Tip: Use <span className='font-medium text-foreground'>@</span> to reference chats, workflows, knowledge, blocks, or templates</p>
           <p className='mt-1.5'>Shift+Enter for newline</p>
         </div>
       </div>
