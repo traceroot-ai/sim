@@ -26,9 +26,9 @@ import { syncSubscriptionUsageLimits } from '@/lib/billing/organization'
 import { getPlans } from '@/lib/billing/plans'
 import type { EnterpriseSubscriptionMetadata } from '@/lib/billing/types'
 import {
+  handleInvoiceCreated,
   handleInvoicePaymentFailed,
   handleInvoicePaymentSucceeded,
-  handleInvoiceUpcoming,
 } from '@/lib/billing/webhooks/invoices'
 import { sendEmail } from '@/lib/email/mailer'
 import { getFromEmailAddress } from '@/lib/email/utils'
@@ -1414,8 +1414,8 @@ export const auth = betterAuth({
                     await handleInvoicePaymentFailed(event)
                     break
                   }
-                  case 'invoice.upcoming': {
-                    await handleInvoiceUpcoming(event)
+                  case 'invoice.created': {
+                    await handleInvoiceCreated(event)
                     break
                   }
                   case 'customer.subscription.created': {

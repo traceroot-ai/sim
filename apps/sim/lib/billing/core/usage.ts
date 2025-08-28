@@ -81,7 +81,7 @@ export async function getUserUsageData(userId: string): Promise<UsageData> {
       }
     }
 
-    const percentUsed = limit > 0 ? Math.round((currentUsage / limit) * 100) : 0
+    const percentUsed = limit > 0 ? Math.min(Math.floor((currentUsage / limit) * 100), 100) : 0
     const isWarning = percentUsed >= 80
     const isExceeded = currentUsage >= limit
 

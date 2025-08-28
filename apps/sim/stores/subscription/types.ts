@@ -30,9 +30,10 @@ export interface SubscriptionData {
   stripeSubscriptionId: string | null
   periodEnd: Date | null
   usage: UsageData
+  billingBlocked?: boolean
 }
 
-export type BillingStatus = 'unknown' | 'ok' | 'warning' | 'exceeded'
+export type BillingStatus = 'unknown' | 'ok' | 'warning' | 'exceeded' | 'blocked'
 
 export interface SubscriptionStore {
   subscriptionData: SubscriptionData | null

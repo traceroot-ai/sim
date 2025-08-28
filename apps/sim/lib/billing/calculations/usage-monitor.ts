@@ -71,7 +71,7 @@ export async function checkUsageStatus(userId: string): Promise<UsageData> {
     )
 
     // Calculate percentage used
-    const percentUsed = Math.min(Math.round((currentUsage / limit) * 100), 100)
+    const percentUsed = Math.min(Math.floor((currentUsage / limit) * 100), 100)
 
     // Check org-level cap for team/enterprise pooled usage
     let isExceeded = currentUsage >= limit
@@ -253,6 +253,28 @@ export async function checkServerSideUsageLimits(userId: string): Promise<{
     }
 
     logger.info('Server-side checking usage limits for user', { userId })
+
+    // Hard block if billing is flagged as blocked
+    const stats = await db
+      .select({
+        blocked: userStats.billingBlocked,
+        current: userStats.currentPeriodCost,
+        total: userStats.totalCost,
+      })
+      .from(userStats)
+      .where(eq(userStats.userId, userId))
+      .limit(1)
+    if (stats.length > 0 && stats[0].blocked) {
+      const currentUsage = Number.parseFloat(
+        stats[0].current?.toString() || stats[0].total.toString()
+      )
+      return {
+        isExceeded: true,
+        currentUsage,
+        limit: 0,
+        message: 'Billing issue detected. Please update your payment method to continue.',
+      }
+    }
 
     // Get usage data using the same function we use for client-side
     const usageData = await checkUsageStatus(userId)

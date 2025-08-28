@@ -89,6 +89,7 @@ export interface OrganizationBillingData {
   billingPeriodEnd: string | null
   members?: MemberUsageData[]
   userRole?: string
+  billingBlocked?: boolean
 }
 
 export interface OrganizationState {

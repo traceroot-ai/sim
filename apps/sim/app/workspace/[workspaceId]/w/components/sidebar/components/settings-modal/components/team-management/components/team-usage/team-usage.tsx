@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, Check, Pencil, X } from 'lucide-react'
+import { useCallback, useEffect, useRef } from 'react'
+import { AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveOrganization } from '@/lib/auth-client'
 import { createLogger } from '@/lib/logs/console/logger'
-import { cn } from '@/lib/utils'
 import { UsageHeader } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/settings-modal/components/shared/usage-header'
 import {
   UsageLimit,
@@ -15,191 +13,6 @@ import { useOrganizationStore } from '@/stores/organization'
 import { useSubscriptionStore } from '@/stores/subscription/store'
 
 const logger = createLogger('TeamUsage')
-
-// Team-specific usage limit component
-interface TeamUsageLimitProps {
-  currentLimit: number
-  currentUsage: number
-  canEdit: boolean
-  minimumLimit: number
-  organizationId: string
-  onLimitUpdated?: (newLimit: number) => void
-}
-
-function TeamUsageLimit({
-  currentLimit,
-  currentUsage,
-  canEdit,
-  minimumLimit,
-  organizationId,
-  onLimitUpdated,
-}: TeamUsageLimitProps) {
-  const [inputValue, setInputValue] = useState(currentLimit.toString())
-  const [isSaving, setIsSaving] = useState(false)
-  const [hasError, setHasError] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const handleStartEdit = () => {
-    if (!canEdit) return
-    setIsEditing(true)
-    setInputValue(currentLimit.toString())
-  }
-
-  useEffect(() => {
-    setInputValue(currentLimit.toString())
-  }, [currentLimit])
-
-  useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [isEditing])
-
-  useEffect(() => {
-    if (hasError) {
-      const timer = setTimeout(() => {
-        setHasError(false)
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [hasError])
-
-  const handleSubmit = async () => {
-    const newLimit = Number.parseInt(inputValue, 10)
-
-    if (Number.isNaN(newLimit) || newLimit < minimumLimit) {
-      setInputValue(currentLimit.toString())
-      setIsEditing(false)
-      return
-    }
-
-    if (newLimit < currentUsage) {
-      setHasError(true)
-      return
-    }
-
-    if (newLimit === currentLimit) {
-      setIsEditing(false)
-      return
-    }
-
-    setIsSaving(true)
-
-    try {
-      const response = await fetch('/api/usage-limits', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          context: 'organization',
-          organizationId,
-          limit: newLimit,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update usage cap')
-      }
-
-      setInputValue(newLimit.toString())
-      onLimitUpdated?.(newLimit)
-      setIsEditing(false)
-      setHasError(false)
-    } catch (error) {
-      logger.error('Failed to update team usage limit', { error })
-      setHasError(true)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handleCancelEdit = () => {
-    setIsEditing(false)
-    setInputValue(currentLimit.toString())
-    setHasError(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSubmit()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      handleCancelEdit()
-    }
-  }
-
-  return (
-    <div className='flex items-center'>
-      {isEditing ? (
-        <>
-          <span className='text-muted-foreground text-xs tabular-nums'>$</span>
-          <input
-            ref={inputRef}
-            type='number'
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={(e) => {
-              const relatedTarget = e.relatedTarget as HTMLElement
-              if (relatedTarget?.closest('button')) {
-                return
-              }
-              handleSubmit()
-            }}
-            className={cn(
-              'w-[3ch] border-0 bg-transparent p-0 text-xs tabular-nums',
-              'outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0',
-              '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
-              hasError && 'text-red-500'
-            )}
-            min={minimumLimit}
-            max='999'
-            step='1'
-            disabled={isSaving}
-            autoComplete='off'
-            autoCorrect='off'
-            autoCapitalize='off'
-            spellCheck='false'
-          />
-        </>
-      ) : (
-        <span className='text-muted-foreground text-xs tabular-nums'>${currentLimit}</span>
-      )}
-      {canEdit && (
-        <Button
-          variant='ghost'
-          size='icon'
-          className={cn(
-            'ml-1 h-4 w-4 p-0 transition-colors hover:bg-transparent',
-            hasError
-              ? 'text-red-500 hover:text-red-600'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-          onClick={isEditing ? handleSubmit : handleStartEdit}
-          disabled={isSaving}
-          data-team-usage-edit
-        >
-          {isEditing ? (
-            hasError ? (
-              <X className='!h-3 !w-3' />
-            ) : (
-              <Check className='!h-3 !w-3' />
-            )
-          ) : (
-            <Pencil className='!h-3 !w-3' />
-          )}
-          <span className='sr-only'>{isEditing ? 'Save limit' : 'Edit limit'}</span>
-        </Button>
-      )}
-    </div>
-  )
-}
 
 interface TeamUsageProps {
   hasAdminAccess: boolean
@@ -273,7 +86,10 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
   const currentCap = billingData.totalUsageLimit || billingData.minimumBillingAmount || 0
   const minimumBilling = billingData.minimumBillingAmount || 0
   const seatsCount = billingData.seatsCount || 1
-  const percentUsed = currentCap > 0 ? Math.min((currentUsage / currentCap) * 100, 100) : 0
+  const percentUsed =
+    currentCap > 0 ? Math.round(Math.min((currentUsage / currentCap) * 100, 100)) : 0
+  const status: 'ok' | 'warning' | 'exceeded' =
+    percentUsed >= 100 ? 'exceeded' : percentUsed >= 80 ? 'warning' : 'ok'
 
   const subscription = getSubscriptionStatus()
   const title = subscription.isEnterprise
@@ -286,7 +102,7 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
   return (
     <UsageHeader
       title={title}
-      gradientTitle
+      gradientTitle={!subscription.isFree}
       showBadge={!!(hasAdminAccess && activeOrg?.id && !subscription.isEnterprise)}
       badgeText={subscription.isEnterprise ? undefined : 'Increase Limit'}
       onBadgeClick={() => {
@@ -295,6 +111,28 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
       seatsText={`${seatsCount} seats`}
       current={currentUsage}
       limit={currentCap}
+      isBlocked={Boolean(billingData?.billingBlocked)}
+      status={status}
+      percentUsed={percentUsed}
+      onResolvePayment={async () => {
+        try {
+          const res = await fetch('/api/billing/portal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              context: 'organization',
+              organizationId: activeOrg?.id,
+              returnUrl: `${window.location.origin}/workspace?billing=updated`,
+            }),
+          })
+          const data = await res.json()
+          if (!res.ok || !data?.url)
+            throw new Error(data?.error || 'Failed to start billing portal')
+          window.location.href = data.url
+        } catch (e) {
+          alert(e instanceof Error ? e.message : 'Failed to open billing portal')
+        }
+      }}
       rightContent={
         hasAdminAccess && activeOrg?.id && !subscription.isEnterprise ? (
           <UsageLimit

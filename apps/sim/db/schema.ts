@@ -451,6 +451,7 @@ export const userStats = pgTable('user_stats', {
   totalCopilotTokens: integer('total_copilot_tokens').notNull().default(0),
   totalCopilotCalls: integer('total_copilot_calls').notNull().default(0),
   lastActive: timestamp('last_active').notNull().defaultNow(),
+  billingBlocked: boolean('billing_blocked').notNull().default(false),
 })
 
 export const customTools = pgTable('custom_tools', {

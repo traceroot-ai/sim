@@ -67,9 +67,12 @@ export function UsageIndicator({ onClick }: UsageIndicatorProps) {
         : 'free'
 
   // Determine badge to show
-  const showAddBadge = planType !== 'free' && usage.percentUsed >= 50
-  const badgeText = planType === 'free' ? 'Upgrade' : 'Add'
-  const badgeType = planType === 'free' ? 'upgrade' : 'add'
+  const billingStatus = useSubscriptionStore.getState().getBillingStatus()
+  const isBlocked = billingStatus === 'blocked'
+  const showAddBadge =
+    !isBlocked && planType !== 'free' && planType !== 'enterprise' && usage.percentUsed >= 50
+  const badgeText = isBlocked ? 'Payment Failed' : planType === 'free' ? 'Upgrade' : 'Add'
+  const badgeType = isBlocked ? 'upgrade' : planType === 'free' ? 'upgrade' : 'add'
 
   return (
     <div className={CONTAINER_STYLES} onClick={() => onClick?.(badgeType)}>
@@ -90,12 +93,12 @@ export function UsageIndicator({ onClick }: UsageIndicatorProps) {
             )}
           </div>
           <span className='text-muted-foreground text-xs tabular-nums'>
-            ${usage.current.toFixed(2)} / ${usage.limit}
+            {isBlocked ? 'Payment required' : `$${usage.current.toFixed(2)} / $${usage.limit}`}
           </span>
         </div>
 
-        {/* Progress Bar */}
-        <Progress value={progressPercentage} className='h-2' />
+        {/* Progress Bar with color: yellow for warning, red for full/blocked */}
+        <Progress value={isBlocked ? 100 : progressPercentage} className='h-2' />
       </div>
     </div>
   )

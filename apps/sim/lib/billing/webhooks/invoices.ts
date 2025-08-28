@@ -8,132 +8,113 @@ import { member, subscription as subscriptionTable, userStats } from '@/db/schem
 
 const logger = createLogger('StripeInvoiceWebhooks')
 
+async function resetUsageForSubscription(sub: { plan: string | null; referenceId: string }) {
+  if (sub.plan === 'team' || sub.plan === 'enterprise') {
+    const membersRows = await db
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, sub.referenceId))
+
+    for (const m of membersRows) {
+      const currentStats = await db
+        .select({ current: userStats.currentPeriodCost })
+        .from(userStats)
+        .where(eq(userStats.userId, m.userId))
+        .limit(1)
+      if (currentStats.length > 0) {
+        const current = currentStats[0].current || '0'
+        await db
+          .update(userStats)
+          .set({ lastPeriodCost: current, currentPeriodCost: '0' })
+          .where(eq(userStats.userId, m.userId))
+      }
+    }
+  } else {
+    const currentStats = await db
+      .select({ current: userStats.currentPeriodCost })
+      .from(userStats)
+      .where(eq(userStats.userId, sub.referenceId))
+      .limit(1)
+    if (currentStats.length > 0) {
+      const current = currentStats[0].current || '0'
+      await db
+        .update(userStats)
+        .set({ lastPeriodCost: current, currentPeriodCost: '0' })
+        .where(eq(userStats.userId, sub.referenceId))
+    }
+  }
+}
+
 /**
  * Handle invoice payment succeeded webhook
- * This is triggered when a user successfully pays a usage billing invoice
+ * We unblock any previously blocked users for this subscription.
  */
 export async function handleInvoicePaymentSucceeded(event: Stripe.Event) {
   try {
     const invoice = event.data.object as Stripe.Invoice
 
-    // Case 1: Overage invoices (metadata.type === 'overage_billing')
-    if (invoice.metadata?.type === 'overage_billing') {
-      const customerId = invoice.customer as string
-      const chargedAmount = invoice.amount_paid / 100
-      const billingPeriod = invoice.metadata?.billingPeriod || 'unknown'
+    if (!invoice.subscription) return
+    const stripeSubscriptionId = String(invoice.subscription)
+    const records = await db
+      .select()
+      .from(subscriptionTable)
+      .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscriptionId))
+      .limit(1)
 
-      logger.info('Overage billing invoice payment succeeded', {
-        invoiceId: invoice.id,
-        customerId,
-        chargedAmount,
-        billingPeriod,
-        customerEmail: invoice.customer_email,
-        hostedInvoiceUrl: invoice.hosted_invoice_url,
-      })
+    if (records.length === 0) return
+    const sub = records[0]
 
-      return
-    }
-
-    // Case 2: Subscription renewal invoice paid (primary period rollover)
-    // Compute overage at payment time, then reset usage
-    if (invoice.subscription) {
-      // Filter to subscription-cycle renewals only; ignore updates/off-cycle charges
-      const reason = invoice.billing_reason
-      const isCycle = reason === 'subscription_cycle'
-      if (!isCycle) {
-        logger.info('Ignoring non-cycle subscription invoice on payment_succeeded', {
-          invoiceId: invoice.id,
-          billingReason: reason,
-        })
-        return
-      }
-
-      const stripeSubscriptionId = String(invoice.subscription)
-      const records = await db
-        .select()
-        .from(subscriptionTable)
-        .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscriptionId))
-        .limit(1)
-
-      if (records.length === 0) {
-        logger.warn('No matching internal subscription for paid Stripe invoice', {
-          invoiceId: invoice.id,
-          stripeSubscriptionId,
-        })
-        return
-      }
-
-      const sub = records[0]
-
-      // Reset usage counters
-      if (sub.plan === 'team' || sub.plan === 'enterprise') {
-        // Reset billing period for all organization members
-        const members = await db
-          .select({ userId: member.userId })
-          .from(member)
-          .where(eq(member.organizationId, sub.referenceId))
-
-        for (const memberRecord of members) {
-          const currentStats = await db
-            .select({ currentPeriodCost: userStats.currentPeriodCost })
-            .from(userStats)
-            .where(eq(userStats.userId, memberRecord.userId))
-            .limit(1)
-
-          if (currentStats.length > 0) {
-            const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
-            await db
-              .update(userStats)
-              .set({
-                lastPeriodCost: currentPeriodCost,
-                currentPeriodCost: '0',
-              })
-              .where(eq(userStats.userId, memberRecord.userId))
-          }
-        }
-
-        logger.info('Reset organization billing period on subscription invoice payment', {
-          invoiceId: invoice.id,
-          organizationId: sub.referenceId,
-          plan: sub.plan,
-          memberCount: members.length,
-        })
-      } else {
-        // Reset billing period for individual user
-        const currentStats = await db
-          .select({ currentPeriodCost: userStats.currentPeriodCost })
+    // Only reset usage here if the tenant was previously blocked; otherwise invoice.created already reset it
+    let wasBlocked = false
+    if (sub.plan === 'team' || sub.plan === 'enterprise') {
+      const membersRows = await db
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, sub.referenceId))
+      for (const m of membersRows) {
+        const row = await db
+          .select({ blocked: userStats.billingBlocked })
           .from(userStats)
-          .where(eq(userStats.userId, sub.referenceId))
+          .where(eq(userStats.userId, m.userId))
           .limit(1)
-
-        if (currentStats.length > 0) {
-          const currentPeriodCost = currentStats[0].currentPeriodCost || '0'
-          await db
-            .update(userStats)
-            .set({
-              lastPeriodCost: currentPeriodCost,
-              currentPeriodCost: '0',
-            })
-            .where(eq(userStats.userId, sub.referenceId))
+        if (row.length > 0 && row[0].blocked) {
+          wasBlocked = true
+          break
         }
-
-        logger.info('Reset user billing period on subscription invoice payment', {
-          invoiceId: invoice.id,
-          userId: sub.referenceId,
-          plan: sub.plan,
-        })
       }
-
-      return
+    } else {
+      const row = await db
+        .select({ blocked: userStats.billingBlocked })
+        .from(userStats)
+        .where(eq(userStats.userId, sub.referenceId))
+        .limit(1)
+      wasBlocked = row.length > 0 ? !!row[0].blocked : false
     }
 
-    logger.info('Ignoring non-subscription invoice payment', { invoiceId: invoice.id })
+    if (sub.plan === 'team' || sub.plan === 'enterprise') {
+      const members = await db
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, sub.referenceId))
+      for (const m of members) {
+        await db
+          .update(userStats)
+          .set({ billingBlocked: false })
+          .where(eq(userStats.userId, m.userId))
+      }
+    } else {
+      await db
+        .update(userStats)
+        .set({ billingBlocked: false })
+        .where(eq(userStats.userId, sub.referenceId))
+    }
+
+    if (wasBlocked) {
+      await resetUsageForSubscription({ plan: sub.plan, referenceId: sub.referenceId })
+    }
   } catch (error) {
-    logger.error('Failed to handle invoice payment succeeded', {
-      eventId: event.id,
-      error,
-    })
-    throw error // Re-throw to signal webhook failure
+    logger.error('Failed to handle invoice payment succeeded', { eventId: event.id, error })
+    throw error
   }
 }
 
@@ -168,15 +149,42 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
 
     // Implement dunning management logic here
     // For example: suspend service after multiple failures, notify admins, etc.
-    if (attemptCount >= 3) {
+    if (attemptCount >= 1) {
       logger.error('Multiple payment failures for overage billing', {
         invoiceId: invoice.id,
         customerId,
         attemptCount,
       })
+      // Block all users under this customer (org members or individual)
+      const stripeSubscriptionId = String(invoice.subscription || '')
+      if (stripeSubscriptionId) {
+        const records = await db
+          .select()
+          .from(subscriptionTable)
+          .where(eq(subscriptionTable.stripeSubscriptionId, stripeSubscriptionId))
+          .limit(1)
 
-      // Could implement service suspension here
-      // await suspendUserService(customerId)
+        if (records.length > 0) {
+          const sub = records[0]
+          if (sub.plan === 'team' || sub.plan === 'enterprise') {
+            const members = await db
+              .select({ userId: member.userId })
+              .from(member)
+              .where(eq(member.organizationId, sub.referenceId))
+            for (const m of members) {
+              await db
+                .update(userStats)
+                .set({ billingBlocked: true })
+                .where(eq(userStats.userId, m.userId))
+            }
+          } else {
+            await db
+              .update(userStats)
+              .set({ billingBlocked: true })
+              .where(eq(userStats.userId, sub.referenceId))
+          }
+        }
+      }
     }
   } catch (error) {
     logger.error('Failed to handle invoice payment failed', {
@@ -187,14 +195,12 @@ export async function handleInvoicePaymentFailed(event: Stripe.Event) {
   }
 }
 
-export async function handleInvoiceUpcoming(event: Stripe.Event) {
+export async function handleInvoiceCreated(event: Stripe.Event) {
   try {
     const invoice = event.data.object as Stripe.Invoice
 
-    if (!invoice.subscription) {
-      logger.info('Ignoring upcoming invoice without subscription')
-      return
-    }
+    // Only handle subscription renewal invoices (start of new period)
+    if (!invoice.subscription || invoice.billing_reason !== 'subscription_cycle') return
 
     const stripeSubscriptionId = String(invoice.subscription)
     const records = await db
@@ -220,7 +226,8 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
       metadata: Record<string, string>
     ) {
       const stripe = requireStripeClient()
-      const billingPeriod = new Date().toISOString().slice(0, 7)
+      const periodEnd = invoice.lines?.data?.[0]?.period?.end || Math.floor(Date.now() / 1000)
+      const billingPeriod = new Date(periodEnd * 1000).toISOString().slice(0, 7)
       await stripe.invoiceItems.create(
         {
           customer: customerId,
@@ -266,11 +273,9 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
         await addOverageItem(invoice.customer as string, stripeSubscriptionId, totalOverage, {
           organizationId: sub.referenceId,
         })
-        logger.info('Added overage invoice item to upcoming invoice (org)', {
-          organizationId: sub.referenceId,
-          totalOverage,
-        })
       }
+      // Reset usage for the new period
+      await resetUsageForSubscription({ plan: sub.plan, referenceId: sub.referenceId })
     } else {
       const usage = await getUserUsageData(sub.referenceId)
       const { getPlanPricing } = await import('@/lib/billing/core/billing')
@@ -281,14 +286,13 @@ export async function handleInvoiceUpcoming(event: Stripe.Event) {
         await addOverageItem(invoice.customer as string, stripeSubscriptionId, overage, {
           userId: sub.referenceId,
         })
-        logger.info('Added overage invoice item to upcoming invoice (user)', {
-          userId: sub.referenceId,
-          overage,
-        })
       }
+
+      // Reset usage for the new period
+      await resetUsageForSubscription({ plan: sub.plan, referenceId: sub.referenceId })
     }
   } catch (error) {
-    logger.error('Failed to handle invoice upcoming', { error })
+    logger.error('Failed to handle invoice created', { error })
     throw error
   }
 }

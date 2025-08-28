@@ -362,6 +362,29 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
                 ? usage.current // placeholder; rightContent will render UsageLimit
                 : usage.limit
             }
+            isBlocked={Boolean(subscriptionData?.billingBlocked)}
+            status={billingStatus === 'unknown' ? 'ok' : billingStatus}
+            percentUsed={Math.round(usage.percentUsed)}
+            onResolvePayment={async () => {
+              try {
+                const res = await fetch('/api/billing/portal', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    context:
+                      subscription.isTeam || subscription.isEnterprise ? 'organization' : 'user',
+                    organizationId: activeOrgId,
+                    returnUrl: `${window.location.origin}/workspace?billing=updated`,
+                  }),
+                })
+                const data = await res.json()
+                if (!res.ok || !data?.url)
+                  throw new Error(data?.error || 'Failed to start billing portal')
+                window.location.href = data.url
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Failed to open billing portal')
+              }
+            }}
             rightContent={
               !subscription.isFree &&
               (permissions.canEditUsageLimit ||
@@ -396,7 +419,7 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
                 </span>
               )
             }
-            progressValue={Math.min(usage.percentUsed, 100)}
+            progressValue={Math.min(Math.round(usage.percentUsed), 100)}
           />
         </div>
 

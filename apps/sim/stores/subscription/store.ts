@@ -65,7 +65,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
           }
 
           const result = await response.json()
-          const data = result.data
+          const data = { ...result.data, billingBlocked: result.data?.billingBlocked ?? false }
 
           // Transform dates with error handling
           const transformedData: SubscriptionData = {
@@ -103,6 +103,7 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
                   })()
                 : null,
             },
+            billingBlocked: !!data.billingBlocked,
           }
 
           // Debug logging for billing periods
@@ -380,6 +381,8 @@ export const useSubscriptionStore = create<SubscriptionStore>()(
 
       getBillingStatus: (): BillingStatus => {
         const usage = get().getUsage()
+        const blocked = get().subscriptionData?.billingBlocked
+        if (blocked) return 'blocked'
         if (usage.isExceeded) return 'exceeded'
         if (usage.isWarning) return 'warning'
         return 'ok'
