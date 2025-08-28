@@ -32,8 +32,8 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
 
   static readonly metadata: BaseClientToolMetadata = {
     displayNames: {
-      [ClientToolCallState.generating]: { text: 'Setting workflow variables', icon: Loader2 },
-      [ClientToolCallState.pending]: { text: 'Setting workflow variables', icon: Loader2 },
+      [ClientToolCallState.generating]: { text: 'Preparing to set workflow variables', icon: Loader2 },
+      [ClientToolCallState.pending]: { text: 'Set workflow variables?', icon: Settings2 },
       [ClientToolCallState.executing]: { text: 'Setting workflow variables', icon: Loader2 },
       [ClientToolCallState.success]: { text: 'Workflow variables updated', icon: Settings2 },
       [ClientToolCallState.error]: { text: 'Failed to set workflow variables', icon: X },
