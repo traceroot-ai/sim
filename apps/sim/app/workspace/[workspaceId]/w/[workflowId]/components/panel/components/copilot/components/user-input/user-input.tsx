@@ -526,13 +526,13 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           ? mentionOptions.filter((o) => o.toLowerCase().includes(mainQ))
           : []
         const isAggregate = !openSubmenuFor && mainQ.length > 0 && filteredMain.length === 0
-        const aggregatedList = !openSubmenuFor && mainQ.length > 0
+                  const aggregatedList = !openSubmenuFor && mainQ.length > 0
           ? [
-              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(mainQ)).map((c) => ({ type: 'Chats' as const, value: c })),
               ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(mainQ)).map((w) => ({ type: 'Workflows' as const, value: w })),
-              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(mainQ)).map((k) => ({ type: 'Knowledge' as const, value: k })),
               ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(mainQ)).map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(mainQ)).map((k) => ({ type: 'Knowledge' as const, value: k })),
               ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(mainQ)).map((t) => ({ type: 'Templates' as const, value: t })),
+              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(mainQ)).map((c) => ({ type: 'Chats' as const, value: c })),
             ]
           : []
 
@@ -599,11 +599,11 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         } else if (isAggregate) {
           const q = mainQ
           const aggregated = [
-            ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
             ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
-            ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
             ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
+            ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
             ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
+            ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
           ]
           setInAggregated(true)
           setSubmenuActiveIndex((prev) => {
@@ -827,7 +827,25 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           const filteredMain = mentionOptions.filter((o) => o.toLowerCase().includes(mainQ))
           const isAggregate = !openSubmenuFor && mainQ.length > 0 && filteredMain.length === 0
           const selected = filteredMain[mentionActiveIndex]
-          if (!openSubmenuFor && selected === 'Chats') {
+          if (inAggregated) {
+            const q = mainQ
+            const aggregated = [
+              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
+              ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
+              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
+              ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
+            ]
+            const idx = Math.max(0, Math.min(submenuActiveIndex, aggregated.length - 1))
+            const chosen = aggregated[idx]
+            if (chosen) {
+              if (chosen.type === 'Chats') insertPastChatMention(chosen.value as any)
+              else if (chosen.type === 'Workflows') insertWorkflowMention(chosen.value as any)
+              else if (chosen.type === 'Knowledge') insertKnowledgeMention(chosen.value as any)
+              else if (chosen.type === 'Blocks') insertBlockMention(chosen.value as any)
+              else if (chosen.type === 'Templates') insertTemplateMention(chosen.value as any)
+            }
+          } else if (!openSubmenuFor && selected === 'Chats') {
             resetActiveMentionQuery()
             setOpenSubmenuFor('Chats')
             setSubmenuActiveIndex(0)
@@ -1723,21 +1741,21 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
                         if (q.length > 0 && filtered.length === 0) {
                           // Aggregated search view
                           const aggregated = [
-                            ...pastChats
-                              .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
-                              .map((c) => ({ type: 'Chats' as const, id: c.id, value: c, onClick: () => insertPastChatMention(c) })),
                             ...workflows
                               .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q))
                               .map((w) => ({ type: 'Workflows' as const, id: w.id, value: w, onClick: () => insertWorkflowMention(w) })),
-                            ...knowledgeBases
-                              .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
-                              .map((k) => ({ type: 'Knowledge' as const, id: k.id, value: k, onClick: () => insertKnowledgeMention(k) })),
                             ...blocksList
                               .filter((b) => (b.name || b.id).toLowerCase().includes(q))
                               .map((b) => ({ type: 'Blocks' as const, id: b.id, value: b, onClick: () => insertBlockMention(b) })),
+                            ...knowledgeBases
+                              .filter((k) => (k.name || 'Untitled').toLowerCase().includes(q))
+                              .map((k) => ({ type: 'Knowledge' as const, id: k.id, value: k, onClick: () => insertKnowledgeMention(k) })),
                             ...templatesList
                               .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q))
                               .map((t) => ({ type: 'Templates' as const, id: t.id, value: t, onClick: () => insertTemplateMention(t) })),
+                            ...pastChats
+                              .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q))
+                              .map((c) => ({ type: 'Chats' as const, id: c.id, value: c, onClick: () => insertPastChatMention(c) })),
                           ]
                           return (
                             <div ref={menuListRef} className='flex-1 overflow-auto overscroll-contain'>
@@ -1880,23 +1898,23 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
 
                             {(() => {
                               const aq = q
-                              const aggregated = [
-                                ...pastChats
-                                  .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(aq))
-                                  .map((c) => ({ type: 'Chats' as const, value: c })),
-                                ...workflows
-                                  .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(aq))
-                                  .map((w) => ({ type: 'Workflows' as const, value: w })),
-                                ...knowledgeBases
-                                  .filter((k) => (k.name || 'Untitled').toLowerCase().includes(aq))
-                                  .map((k) => ({ type: 'Knowledge' as const, value: k })),
-                                ...blocksList
-                                  .filter((b) => (b.name || b.id).toLowerCase().includes(aq))
-                                  .map((b) => ({ type: 'Blocks' as const, value: b })),
-                                ...templatesList
-                                  .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(aq))
-                                  .map((t) => ({ type: 'Templates' as const, value: t })),
-                              ]
+                                                        const aggregated = [
+                            ...workflows
+                              .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(aq))
+                              .map((w) => ({ type: 'Workflows' as const, value: w })),
+                            ...blocksList
+                              .filter((b) => (b.name || b.id).toLowerCase().includes(aq))
+                              .map((b) => ({ type: 'Blocks' as const, value: b })),
+                            ...knowledgeBases
+                              .filter((k) => (k.name || 'Untitled').toLowerCase().includes(aq))
+                              .map((k) => ({ type: 'Knowledge' as const, value: k })),
+                            ...templatesList
+                              .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(aq))
+                              .map((t) => ({ type: 'Templates' as const, value: t })),
+                            ...pastChats
+                              .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(aq))
+                              .map((c) => ({ type: 'Chats' as const, value: c })),
+                          ]
                               if (!aq || aq.length === 0 || aggregated.length === 0) return null
                               return (
                                 <>
