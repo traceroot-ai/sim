@@ -35,6 +35,7 @@ export interface CopilotMessage {
         startTime?: number
       }
     | { type: 'tool_call'; toolCall: CopilotToolCall; timestamp: number }
+    | { type: 'contexts'; contexts: ChatContext[]; timestamp: number }
   >
   fileAttachments?: MessageFileAttachment[]
   contexts?: ChatContext[]

@@ -1389,12 +1389,15 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       const filteredMain = mentionOptions.filter((o) => o.toLowerCase().includes(q))
       const needAggregate = q.length > 0 && filteredMain.length === 0
       setAggregatedActive(needAggregate)
-      if (needAggregate) {
+      // Prefetch all lists whenever there is any query so the Matches section has data
+      if (q.length > 0) {
         void ensurePastChatsLoaded()
         void ensureWorkflowsLoaded()
         void ensureKnowledgeLoaded()
         void ensureBlocksLoaded()
         void ensureTemplatesLoaded()
+      }
+      if (needAggregate) {
         setSubmenuActiveIndex(0)
         requestAnimationFrame(() => scrollActiveItemIntoView(0))
       }

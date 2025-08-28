@@ -266,7 +266,19 @@ function abortAllInProgressTools(set: any, get: () => CopilotStore) {
 function normalizeMessagesForUI(messages: CopilotMessage[]): CopilotMessage[] {
   try {
     return messages.map((message) => {
-      if (message.role !== 'assistant') return message
+      if (message.role !== 'assistant') {
+        // For user messages (and others), restore contexts from a saved contexts block
+        if (Array.isArray(message.contentBlocks) && message.contentBlocks.length > 0) {
+          const ctxBlock = (message.contentBlocks as any[]).find((b: any) => b?.type === 'contexts')
+          if (ctxBlock && Array.isArray((ctxBlock as any).contexts)) {
+            return {
+              ...message,
+              contexts: (ctxBlock as any).contexts,
+            }
+          }
+        }
+        return message
+      }
 
       // Use existing contentBlocks ordering if present; otherwise only render text content
       const blocks: any[] = Array.isArray(message.contentBlocks)
@@ -419,6 +431,11 @@ function createUserMessage(
     timestamp: new Date().toISOString(),
     ...(fileAttachments && fileAttachments.length > 0 && { fileAttachments }),
     ...(contexts && contexts.length > 0 && { contexts }),
+    ...(contexts && contexts.length > 0 && {
+      contentBlocks: [
+        { type: 'contexts', contexts: contexts as any, timestamp: Date.now() },
+      ] as any,
+    }),
   }
 }
 

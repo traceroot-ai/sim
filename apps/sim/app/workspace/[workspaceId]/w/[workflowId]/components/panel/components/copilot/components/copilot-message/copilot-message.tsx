@@ -2,6 +2,7 @@
 
 import { type FC, memo, useEffect, useMemo, useState } from 'react'
 import { Check, Clipboard, Loader2, RotateCcw, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+import { Bot, Workflow, Blocks, LibraryBig, Shapes, Info } from 'lucide-react'
 import { InlineToolCall } from '@/lib/copilot/inline-tool-call'
 import { createLogger } from '@/lib/logs/console/logger'
 import {
@@ -356,6 +357,50 @@ const CopilotMessage: FC<CopilotMessageProps> = memo(
               </div>
             </div>
           )}
+
+          {/* Context chips displayed above the message bubble, independent of inline text */}
+          {(Array.isArray((message as any).contexts) && (message as any).contexts.length > 0) ||
+          (Array.isArray(message.contentBlocks) &&
+            (message.contentBlocks as any[]).some((b: any) => b?.type === 'contexts')) ? (
+            <div className='mb-1 flex justify-end'>
+              <div className='flex flex-wrap gap-1.5'>
+                {(() => {
+                  const direct = Array.isArray((message as any).contexts)
+                    ? ((message as any).contexts as any[])
+                    : []
+                  const block = Array.isArray(message.contentBlocks)
+                    ? (message.contentBlocks as any[]).find((b: any) => b?.type === 'contexts')
+                    : null
+                  const fromBlock = Array.isArray((block as any)?.contexts)
+                    ? ((block as any).contexts as any[])
+                    : []
+                  const contextsList = direct.length > 0 ? direct : fromBlock
+                  return contextsList.map((ctx: any, idx: number) => (
+                    <span
+                      key={`ctx-${idx}-${ctx?.label || ctx?.kind}`}
+                      className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)] px-2 py-0.5 text-foreground text-xs'
+                      title={ctx?.label || ctx?.kind}
+                    >
+                      {ctx?.kind === 'past_chat' ? (
+                        <Bot className='h-3 w-3 text-muted-foreground' />
+                      ) : ctx?.kind === 'workflow' ? (
+                        <Workflow className='h-3 w-3 text-muted-foreground' />
+                      ) : ctx?.kind === 'blocks' ? (
+                        <Blocks className='h-3 w-3 text-muted-foreground' />
+                      ) : ctx?.kind === 'knowledge' ? (
+                        <LibraryBig className='h-3 w-3 text-muted-foreground' />
+                      ) : ctx?.kind === 'templates' ? (
+                        <Shapes className='h-3 w-3 text-muted-foreground' />
+                      ) : (
+                        <Info className='h-3 w-3 text-muted-foreground' />
+                      )}
+                      <span className='max-w-[220px] truncate'>{ctx?.label || ctx?.kind}</span>
+                    </span>
+                  ))
+                })()}
+              </div>
+            </div>
+          ) : null}
 
           <div className='flex items-center justify-end gap-0'>
             {hasCheckpoints && (
