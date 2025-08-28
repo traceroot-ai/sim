@@ -95,7 +95,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       disabled = false,
       isLoading = false,
       isAborting = false,
-      placeholder = 'Build, edit, debug workflows',
+      placeholder,
       className,
       mode = 'agent',
       onModeChange,
@@ -139,6 +139,9 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
 
     const { data: session } = useSession()
     const { currentChat, workflowId } = useCopilotStore()
+
+    // Determine placeholder based on mode
+    const effectivePlaceholder = placeholder || (mode === 'ask' ? 'Ask, plan, understand workflows' : 'Build, edit, debug workflows')
 
     // Track submenu query anchor and aggregate mode
     const [submenuQueryStart, setSubmenuQueryStart] = useState<number | null>(null)
@@ -1537,7 +1540,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
               onKeyDown={handleKeyDown}
               onSelect={handleSelectAdjust}
               onMouseUp={handleSelectAdjust}
-              placeholder={isDragging ? 'Drop files here...' : placeholder}
+              placeholder={isDragging ? 'Drop files here...' : effectivePlaceholder}
               disabled={disabled}
               rows={1}
               className='relative z-[2] mb-2 min-h-[32px] w-full resize-none overflow-y-auto overflow-x-hidden border-0 bg-transparent px-[2px] py-1 text-transparent caret-foreground focus-visible:ring-0 focus-visible:ring-offset-0 font-sans text-sm leading-[1.25rem]'

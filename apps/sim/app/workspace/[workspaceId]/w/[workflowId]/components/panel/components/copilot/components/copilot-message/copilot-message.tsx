@@ -428,7 +428,7 @@ const CopilotMessage: FC<CopilotMessageProps> = memo(
                       if (before) nodes.push(before)
                       const mention = match[0]
                       nodes.push(
-                        <span key={`mention-${i}-${lastIndex}`} className='rounded-[6px] bg-muted px-1'>
+                        <span key={`mention-${i}-${lastIndex}`} className='rounded-[6px] bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)] px-1'>
                           {mention}
                         </span>
                       )
