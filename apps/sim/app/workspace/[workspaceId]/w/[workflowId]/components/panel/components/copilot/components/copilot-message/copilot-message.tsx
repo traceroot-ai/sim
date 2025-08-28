@@ -32,6 +32,7 @@ const CopilotMessage: FC<CopilotMessageProps> = memo(
     const [showUpvoteSuccess, setShowUpvoteSuccess] = useState(false)
     const [showDownvoteSuccess, setShowDownvoteSuccess] = useState(false)
     const [showRestoreConfirmation, setShowRestoreConfirmation] = useState(false)
+    const [showAllContexts, setShowAllContexts] = useState(false)
 
     // Get checkpoint functionality from copilot store
     const {
@@ -362,42 +363,60 @@ const CopilotMessage: FC<CopilotMessageProps> = memo(
           {(Array.isArray((message as any).contexts) && (message as any).contexts.length > 0) ||
           (Array.isArray(message.contentBlocks) &&
             (message.contentBlocks as any[]).some((b: any) => b?.type === 'contexts')) ? (
-            <div className='mb-1 flex justify-end'>
-              <div className='flex flex-wrap gap-1.5'>
-                {(() => {
-                  const direct = Array.isArray((message as any).contexts)
-                    ? ((message as any).contexts as any[])
-                    : []
-                  const block = Array.isArray(message.contentBlocks)
-                    ? (message.contentBlocks as any[]).find((b: any) => b?.type === 'contexts')
-                    : null
-                  const fromBlock = Array.isArray((block as any)?.contexts)
-                    ? ((block as any).contexts as any[])
-                    : []
-                  const contextsList = direct.length > 0 ? direct : fromBlock
-                  return contextsList.map((ctx: any, idx: number) => (
-                    <span
-                      key={`ctx-${idx}-${ctx?.label || ctx?.kind}`}
-                      className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)] px-2 py-0.5 text-foreground text-xs'
-                      title={ctx?.label || ctx?.kind}
-                    >
-                      {ctx?.kind === 'past_chat' ? (
-                        <Bot className='h-3 w-3 text-muted-foreground' />
-                      ) : ctx?.kind === 'workflow' ? (
-                        <Workflow className='h-3 w-3 text-muted-foreground' />
-                      ) : ctx?.kind === 'blocks' ? (
-                        <Blocks className='h-3 w-3 text-muted-foreground' />
-                      ) : ctx?.kind === 'knowledge' ? (
-                        <LibraryBig className='h-3 w-3 text-muted-foreground' />
-                      ) : ctx?.kind === 'templates' ? (
-                        <Shapes className='h-3 w-3 text-muted-foreground' />
-                      ) : (
-                        <Info className='h-3 w-3 text-muted-foreground' />
-                      )}
-                      <span className='max-w-[220px] truncate'>{ctx?.label || ctx?.kind}</span>
-                    </span>
-                  ))
-                })()}
+            <div className='flex items-center justify-end gap-0'>
+              <div className='min-w-0 max-w-[80%]'>
+                <div className='mb-1 flex flex-wrap justify-end gap-1.5'>
+                  {(() => {
+                    const direct = Array.isArray((message as any).contexts)
+                      ? ((message as any).contexts as any[])
+                      : []
+                    const block = Array.isArray(message.contentBlocks)
+                      ? (message.contentBlocks as any[]).find((b: any) => b?.type === 'contexts')
+                      : null
+                    const fromBlock = Array.isArray((block as any)?.contexts)
+                      ? ((block as any).contexts as any[])
+                      : []
+                    const allContexts = direct.length > 0 ? direct : fromBlock
+                    const MAX_VISIBLE = 4
+                    const visible = showAllContexts ? allContexts : allContexts.slice(0, MAX_VISIBLE)
+                    return (
+                      <>
+                        {visible.map((ctx: any, idx: number) => (
+                          <span
+                            key={`ctx-${idx}-${ctx?.label || ctx?.kind}`}
+                            className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)] px-1.5 py-0.5 text-foreground text-[11px]'
+                            title={ctx?.label || ctx?.kind}
+                          >
+                            {ctx?.kind === 'past_chat' ? (
+                              <Bot className='h-3 w-3 text-muted-foreground' />
+                            ) : ctx?.kind === 'workflow' ? (
+                              <Workflow className='h-3 w-3 text-muted-foreground' />
+                            ) : ctx?.kind === 'blocks' ? (
+                              <Blocks className='h-3 w-3 text-muted-foreground' />
+                            ) : ctx?.kind === 'knowledge' ? (
+                              <LibraryBig className='h-3 w-3 text-muted-foreground' />
+                            ) : ctx?.kind === 'templates' ? (
+                              <Shapes className='h-3 w-3 text-muted-foreground' />
+                            ) : (
+                              <Info className='h-3 w-3 text-muted-foreground' />
+                            )}
+                            <span className='max-w-[140px] truncate'>{ctx?.label || ctx?.kind}</span>
+                          </span>
+                        ))}
+                        {allContexts.length > MAX_VISIBLE && (
+                          <button
+                            type='button'
+                            onClick={() => setShowAllContexts((v) => !v)}
+                            className='inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_10%,transparent)] px-1.5 py-0.5 text-foreground text-[11px] hover:bg-[color-mix(in_srgb,var(--brand-primary-hover-hex)_14%,transparent)]'
+                            title={showAllContexts ? 'Show less' : `Show ${allContexts.length - MAX_VISIBLE} more`}
+                          >
+                            {showAllContexts ? 'Show less' : `+${allContexts.length - MAX_VISIBLE} more`}
+                          </button>
+                        )}
+                      </>
+                    )
+                  })()}
+                </div>
               </div>
             </div>
           ) : null}
