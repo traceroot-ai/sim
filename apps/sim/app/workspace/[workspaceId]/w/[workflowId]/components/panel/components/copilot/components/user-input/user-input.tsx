@@ -223,20 +223,16 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         const data = await resp.json()
         const items = Array.isArray(data?.chats) ? data.chats : []
 
-        // Filter chats to only show those from workflows in the current workspace
-        // First, ensure workflows are loaded
         if (workflows.length === 0) {
           await ensureWorkflowsLoaded()
         }
 
-        // Get workflow IDs from the current workspace
         const workspaceWorkflowIds = new Set(workflows.map((w) => w.id))
 
-        // Filter chats to only those from workflows in this workspace
         const workspaceChats = items.filter(
           (c: any) =>
-            !c.workflowId || // Include chats without a workflow (shouldn't happen but defensive)
-            workspaceWorkflowIds.has(c.workflowId) // Include chats from workspace workflows
+            !c.workflowId ||
+            workspaceWorkflowIds.has(c.workflowId)
         )
 
         setPastChats(
