@@ -526,7 +526,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           ? mentionOptions.filter((o) => o.toLowerCase().includes(mainQ))
           : []
         const isAggregate = !openSubmenuFor && mainQ.length > 0 && filteredMain.length === 0
-                  const aggregatedList = !openSubmenuFor && mainQ.length > 0
+        const aggregatedList = !openSubmenuFor && mainQ.length > 0
           ? [
               ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(mainQ)).map((w) => ({ type: 'Workflows' as const, value: w })),
               ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(mainQ)).map((b) => ({ type: 'Blocks' as const, value: b })),
@@ -830,11 +830,11 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           if (inAggregated) {
             const q = mainQ
             const aggregated = [
-              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
               ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
-              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
               ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
               ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
+              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
             ]
             const idx = Math.max(0, Math.min(submenuActiveIndex, aggregated.length - 1))
             const chosen = aggregated[idx]
@@ -918,11 +918,11 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
           } else if (isAggregate || inAggregated) {
             const q = mainQ
             const aggregated = [
-              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
               ...workflows.filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(q)).map((w) => ({ type: 'Workflows' as const, value: w })),
-              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
               ...blocksList.filter((b) => (b.name || b.id).toLowerCase().includes(q)).map((b) => ({ type: 'Blocks' as const, value: b })),
+              ...knowledgeBases.filter((k) => (k.name || 'Untitled').toLowerCase().includes(q)).map((k) => ({ type: 'Knowledge' as const, value: k })),
               ...templatesList.filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(q)).map((t) => ({ type: 'Templates' as const, value: t })),
+              ...pastChats.filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(q)).map((c) => ({ type: 'Chats' as const, value: c })),
             ]
             const idx = Math.max(0, Math.min(submenuActiveIndex, aggregated.length - 1))
             const chosen = aggregated[idx]
@@ -1378,7 +1378,7 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       if (!container) return
       const item = container.querySelector(`[data-idx="${index}"]`) as HTMLElement | null
       if (!item) return
-      const tolerance = 2
+      const tolerance = 8
       const itemTop = item.offsetTop
       const itemBottom = itemTop + item.offsetHeight
       const viewTop = container.scrollTop
@@ -1386,11 +1386,10 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       const needsScrollUp = itemTop < viewTop + tolerance
       const needsScrollDown = itemBottom > viewBottom - tolerance
       if (needsScrollUp || needsScrollDown) {
-        if (typeof item.scrollIntoView === 'function') {
-          item.scrollIntoView({ block: 'nearest' })
+        if (needsScrollUp) {
+          container.scrollTop = Math.max(0, itemTop - tolerance)
         } else {
-          if (needsScrollUp) container.scrollTop = itemTop
-          else container.scrollTop = itemBottom - container.clientHeight
+          container.scrollTop = itemBottom + tolerance - container.clientHeight
         }
       }
     }
@@ -1898,23 +1897,23 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
 
                             {(() => {
                               const aq = q
-                                                        const aggregated = [
-                            ...workflows
-                              .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(aq))
-                              .map((w) => ({ type: 'Workflows' as const, value: w })),
-                            ...blocksList
-                              .filter((b) => (b.name || b.id).toLowerCase().includes(aq))
-                              .map((b) => ({ type: 'Blocks' as const, value: b })),
-                            ...knowledgeBases
-                              .filter((k) => (k.name || 'Untitled').toLowerCase().includes(aq))
-                              .map((k) => ({ type: 'Knowledge' as const, value: k })),
-                            ...templatesList
-                              .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(aq))
-                              .map((t) => ({ type: 'Templates' as const, value: t })),
-                            ...pastChats
-                              .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(aq))
-                              .map((c) => ({ type: 'Chats' as const, value: c })),
-                          ]
+                              const aggregated = [
+                                ...workflows
+                                  .filter((w) => (w.name || 'Untitled Workflow').toLowerCase().includes(aq))
+                                  .map((w) => ({ type: 'Workflows' as const, value: w })),
+                                ...blocksList
+                                  .filter((b) => (b.name || b.id).toLowerCase().includes(aq))
+                                  .map((b) => ({ type: 'Blocks' as const, value: b })),
+                                ...knowledgeBases
+                                  .filter((k) => (k.name || 'Untitled').toLowerCase().includes(aq))
+                                  .map((k) => ({ type: 'Knowledge' as const, value: k })),
+                                ...templatesList
+                                  .filter((t) => (t.name || 'Untitled Template').toLowerCase().includes(aq))
+                                  .map((t) => ({ type: 'Templates' as const, value: t })),
+                                ...pastChats
+                                  .filter((c) => (c.title || 'Untitled Chat').toLowerCase().includes(aq))
+                                  .map((c) => ({ type: 'Chats' as const, value: c })),
+                              ]
                               if (!aq || aq.length === 0 || aggregated.length === 0) return null
                               return (
                                 <>
