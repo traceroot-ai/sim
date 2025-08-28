@@ -4,7 +4,9 @@
  */
 
 export interface EnterpriseSubscriptionMetadata {
+  plan: 'enterprise'
   // Custom per-seat pricing (defaults to DEFAULT_ENTERPRISE_TIER_COST_LIMIT)
+  referenceId: string
   perSeatPrice?: number
 
   // Maximum allowed seats (defaults to subscription.seats)

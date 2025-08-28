@@ -2,16 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Pencil, X } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveOrganization } from '@/lib/auth-client'
 import { createLogger } from '@/lib/logs/console/logger'
 import { cn } from '@/lib/utils'
+import { UsageHeader } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/settings-modal/components/shared/usage-header'
 import {
   UsageLimit,
   type UsageLimitRef,
 } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/settings-modal/components/subscription/components'
 import { useOrganizationStore } from '@/stores/organization'
+import { useSubscriptionStore } from '@/stores/subscription/store'
 
 const logger = createLogger('TeamUsage')
 
@@ -206,6 +207,7 @@ interface TeamUsageProps {
 
 export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
   const { data: activeOrg } = useActiveOrganization()
+  const { getSubscriptionStatus } = useSubscriptionStore()
 
   const {
     organizationBillingData: billingData,
@@ -273,53 +275,45 @@ export function TeamUsage({ hasAdminAccess }: TeamUsageProps) {
   const seatsCount = billingData.seatsCount || 1
   const percentUsed = currentCap > 0 ? Math.min((currentUsage / currentCap) * 100, 100) : 0
 
-  return (
-    <div className='rounded-[8px] border bg-background p-3 shadow-xs'>
-      <div className='space-y-2'>
-        {/* Team info and usage - matching subscription layout */}
-        <div className='flex items-center justify-between'>
-          <div className='flex items-center gap-2'>
-            <span className='gradient-text bg-gradient-to-b from-gradient-primary via-gradient-secondary to-gradient-primary font-medium text-sm'>
-              Team
-            </span>
-            {hasAdminAccess && activeOrg?.id && (
-              <button
-                type='button'
-                onClick={() => {
-                  usageLimitRef.current?.startEdit()
-                }}
-                className='gradient-text h-[1.125rem] cursor-pointer rounded-[6px] border border-gradient-primary/20 bg-gradient-to-b from-gradient-primary via-gradient-secondary to-gradient-primary px-2 py-0 font-medium text-xs'
-              >
-                Increase Limit
-              </button>
-            )}
-            <span className='text-muted-foreground text-xs'>({seatsCount} seats)</span>
-          </div>
-          <div className='flex items-center gap-1 text-xs tabular-nums'>
-            <span className='text-muted-foreground'>${currentUsage.toFixed(2)}</span>
-            <span className='text-muted-foreground'>/</span>
-            {hasAdminAccess && activeOrg?.id ? (
-              <UsageLimit
-                ref={usageLimitRef}
-                currentLimit={currentCap}
-                currentUsage={currentUsage}
-                canEdit={hasAdminAccess}
-                minimumLimit={minimumBilling}
-                context='organization'
-                organizationId={activeOrg.id}
-                onLimitUpdated={handleLimitUpdated}
-              />
-            ) : (
-              <span className='text-muted-foreground text-xs tabular-nums'>
-                ${currentCap.toFixed(0)}
-              </span>
-            )}
-          </div>
-        </div>
+  const subscription = getSubscriptionStatus()
+  const title = subscription.isEnterprise
+    ? 'Enterprise'
+    : subscription.isTeam
+      ? 'Team'
+      : (subscription.plan || 'Free').charAt(0).toUpperCase() +
+        (subscription.plan || 'Free').slice(1)
 
-        {/* Progress Bar - matching subscription component */}
-        <Progress value={percentUsed} className='h-2' />
-      </div>
-    </div>
+  return (
+    <UsageHeader
+      title={title}
+      gradientTitle
+      showBadge={!!(hasAdminAccess && activeOrg?.id && !subscription.isEnterprise)}
+      badgeText={subscription.isEnterprise ? undefined : 'Increase Limit'}
+      onBadgeClick={() => {
+        if (!subscription.isEnterprise) usageLimitRef.current?.startEdit()
+      }}
+      seatsText={`${seatsCount} seats`}
+      current={currentUsage}
+      limit={currentCap}
+      rightContent={
+        hasAdminAccess && activeOrg?.id && !subscription.isEnterprise ? (
+          <UsageLimit
+            ref={usageLimitRef}
+            currentLimit={currentCap}
+            currentUsage={currentUsage}
+            canEdit={hasAdminAccess && !subscription.isEnterprise}
+            minimumLimit={minimumBilling}
+            context='organization'
+            organizationId={activeOrg.id}
+            onLimitUpdated={handleLimitUpdated}
+          />
+        ) : (
+          <span className='text-muted-foreground text-xs tabular-nums'>
+            ${currentCap.toFixed(0)}
+          </span>
+        )
+      }
+      progressValue={percentUsed}
+    />
   )
 }

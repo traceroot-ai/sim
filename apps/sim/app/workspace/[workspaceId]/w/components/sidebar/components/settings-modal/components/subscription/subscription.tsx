@@ -1,10 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Badge, Progress, Skeleton } from '@/components/ui'
+import { Skeleton } from '@/components/ui'
 import { useSession } from '@/lib/auth-client'
 import { useSubscriptionUpgrade } from '@/lib/subscription/upgrade'
 import { cn } from '@/lib/utils'
+import { UsageHeader } from '@/app/workspace/[workspaceId]/w/components/sidebar/components/settings-modal/components/shared/usage-header'
 import {
   CancelSubscription,
   PlanCard,
@@ -341,79 +342,62 @@ export function Subscription({ onOpenChange }: SubscriptionProps) {
       <div className='flex flex-col gap-2'>
         {/* Current Plan & Usage Overview - Styled like usage-indicator */}
         <div className='mb-2'>
-          <div className='rounded-[8px] border bg-background p-3 shadow-xs'>
-            <div className='space-y-2'>
-              {/* Plan and usage info */}
-              <div className='flex items-center justify-between'>
-                <div className='flex items-center gap-2'>
-                  <span
-                    className={cn(
-                      'font-medium text-sm',
-                      subscription.isFree
-                        ? 'text-foreground'
-                        : 'gradient-text bg-gradient-to-b from-gradient-primary via-gradient-secondary to-gradient-primary'
-                    )}
-                  >
-                    {formatPlanName(subscription.plan)}
-                  </span>
-                  {showBadge && (
-                    <Badge
-                      className={STYLES.GRADIENT_BADGE}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleBadgeClick()
-                      }}
-                    >
-                      {badgeText}
-                    </Badge>
-                  )}
-                  {/* Team seats info for admins */}
-                  {permissions.canManageTeam && (
-                    <span className='text-muted-foreground text-xs'>
-                      ({organizationBillingData?.totalSeats || subscription.seats || 1} seats)
-                    </span>
-                  )}
-                </div>
-                <div className='flex items-center gap-1 text-xs tabular-nums'>
-                  <span className='text-muted-foreground'>${usage.current.toFixed(2)}</span>
-                  <span className='text-muted-foreground'>/</span>
-                  {!subscription.isFree &&
-                  (permissions.canEditUsageLimit ||
-                    permissions.showTeamMemberView ||
-                    subscription.isEnterprise) ? (
-                    <UsageLimit
-                      ref={usageLimitRef}
-                      currentLimit={
-                        subscription.isTeam && isTeamAdmin
-                          ? organizationBillingData?.totalUsageLimit || usage.limit
-                          : usageLimitData?.currentLimit || usage.limit
-                      }
-                      currentUsage={usage.current}
-                      canEdit={permissions.canEditUsageLimit && !subscription.isEnterprise}
-                      minimumLimit={
-                        subscription.isTeam && isTeamAdmin
-                          ? organizationBillingData?.minimumBillingAmount ||
-                            (subscription.isPro ? 20 : 40)
-                          : usageLimitData?.minimumLimit || (subscription.isPro ? 20 : 40)
-                      }
-                      context={subscription.isTeam && isTeamAdmin ? 'organization' : 'user'}
-                      organizationId={subscription.isTeam && isTeamAdmin ? activeOrgId : undefined}
-                      onLimitUpdated={async () => {
-                        if (subscription.isTeam && isTeamAdmin && activeOrgId) {
-                          await loadOrganizationBillingData(activeOrgId, true)
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className='text-muted-foreground'>${usage.limit}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <Progress value={Math.min(usage.percentUsed, 100)} className='h-2' />
-            </div>
-          </div>
+          <UsageHeader
+            title={formatPlanName(subscription.plan)}
+            gradientTitle={!subscription.isFree}
+            showBadge={showBadge}
+            badgeText={badgeText}
+            onBadgeClick={handleBadgeClick}
+            seatsText={
+              permissions.canManageTeam
+                ? `${organizationBillingData?.totalSeats || subscription.seats || 1} seats`
+                : undefined
+            }
+            current={usage.current}
+            limit={
+              !subscription.isFree &&
+              (permissions.canEditUsageLimit ||
+                permissions.showTeamMemberView ||
+                subscription.isEnterprise)
+                ? usage.current // placeholder; rightContent will render UsageLimit
+                : usage.limit
+            }
+            rightContent={
+              !subscription.isFree &&
+              (permissions.canEditUsageLimit ||
+                permissions.showTeamMemberView ||
+                subscription.isEnterprise) ? (
+                <UsageLimit
+                  ref={usageLimitRef}
+                  currentLimit={
+                    subscription.isTeam && isTeamAdmin
+                      ? organizationBillingData?.totalUsageLimit || usage.limit
+                      : usageLimitData?.currentLimit || usage.limit
+                  }
+                  currentUsage={usage.current}
+                  canEdit={permissions.canEditUsageLimit && !subscription.isEnterprise}
+                  minimumLimit={
+                    subscription.isTeam && isTeamAdmin
+                      ? organizationBillingData?.minimumBillingAmount ||
+                        (subscription.isPro ? 20 : 40)
+                      : usageLimitData?.minimumLimit || (subscription.isPro ? 20 : 40)
+                  }
+                  context={subscription.isTeam && isTeamAdmin ? 'organization' : 'user'}
+                  organizationId={subscription.isTeam && isTeamAdmin ? activeOrgId : undefined}
+                  onLimitUpdated={async () => {
+                    if (subscription.isTeam && isTeamAdmin && activeOrgId) {
+                      await loadOrganizationBillingData(activeOrgId, true)
+                    }
+                  }}
+                />
+              ) : (
+                <span className='text-muted-foreground text-xs tabular-nums'>
+                  ${usage.current.toFixed(2)} / ${usage.limit}
+                </span>
+              )
+            }
+            progressValue={Math.min(usage.percentUsed, 100)}
+          />
         </div>
 
         {/* Team Member Notice */}
