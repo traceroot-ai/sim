@@ -222,8 +222,24 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         if (!resp.ok) throw new Error(`Failed to load chats: ${resp.status}`)
         const data = await resp.json()
         const items = Array.isArray(data?.chats) ? data.chats : []
+        
+        // Filter chats to only show those from workflows in the current workspace
+        // First, ensure workflows are loaded
+        if (workflows.length === 0) {
+          await ensureWorkflowsLoaded()
+        }
+        
+        // Get workflow IDs from the current workspace
+        const workspaceWorkflowIds = new Set(workflows.map(w => w.id))
+        
+        // Filter chats to only those from workflows in this workspace
+        const workspaceChats = items.filter((c: any) => 
+          !c.workflowId || // Include chats without a workflow (shouldn't happen but defensive)
+          workspaceWorkflowIds.has(c.workflowId) // Include chats from workspace workflows
+        )
+        
         setPastChats(
-          items.map((c: any) => ({
+          workspaceChats.map((c: any) => ({
             id: c.id,
             title: c.title ?? null,
             workflowId: c.workflowId ?? null,
@@ -271,7 +287,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
       if (isLoadingKnowledge || knowledgeBases.length > 0) return
       try {
         setIsLoadingKnowledge(true)
-        const resp = await fetch('/api/knowledge')
+        // Filter by workspace like the Knowledge page does
+        const resp = await fetch(`/api/knowledge?workspaceId=${workspaceId}`)
         if (!resp.ok) throw new Error(`Failed to load knowledge bases: ${resp.status}`)
         const data = await resp.json()
         const items = Array.isArray(data?.data) ? data.data : []
