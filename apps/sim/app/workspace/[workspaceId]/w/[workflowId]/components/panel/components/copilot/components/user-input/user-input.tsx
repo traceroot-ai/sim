@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useParams } from 'next/navigation'
 import {
   ArrowUp,
   AtSign,
@@ -153,6 +154,8 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
 
     const { data: session } = useSession()
     const { currentChat, workflowId } = useCopilotStore()
+    const params = useParams()
+    const workspaceId = params.workspaceId as string
 
     // Determine placeholder based on mode
     const effectivePlaceholder =
@@ -241,8 +244,12 @@ const UserInput = forwardRef<UserInputRef, UserInputProps>(
         if (!resp.ok) throw new Error(`Failed to load workflows: ${resp.status}`)
         const data = await resp.json()
         const items = Array.isArray(data?.data) ? data.data : []
+        // Filter workflows by workspace (same as sidebar)
+        const workspaceFiltered = items.filter((w: any) => 
+          w.workspaceId === workspaceId || !w.workspaceId
+        )
         // Sort by last modified/updated (newest first), matching sidebar behavior
-        const sorted = [...items].sort((a: any, b: any) => {
+        const sorted = [...workspaceFiltered].sort((a: any, b: any) => {
           const ta = new Date(a.lastModified || a.updatedAt || a.createdAt || 0).getTime()
           const tb = new Date(b.lastModified || b.updatedAt || b.createdAt || 0).getTime()
           return tb - ta
