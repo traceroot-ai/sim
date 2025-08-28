@@ -5,6 +5,7 @@ import {
   ClientToolCallState,
 } from '@/lib/copilot/tools/client/base-tool'
 import { createLogger } from '@/lib/logs/console/logger'
+import { useVariablesStore } from '@/stores/panel/variables/store'
 import { useWorkflowRegistry } from '@/stores/workflows/registry/store'
 
 interface OperationItem {
@@ -169,9 +170,7 @@ export class SetGlobalWorkflowVariablesClientTool extends BaseClientTool {
       try {
         const { activeWorkflowId } = useWorkflowRegistry.getState()
         if (activeWorkflowId) {
-          const { loadVariables } = (
-            await import('@/stores/panel/variables/store')
-          ).useVariablesStore.getState()
+          const loadVariables = useVariablesStore.getState().loadVariables
           await loadVariables(String(activeWorkflowId))
         }
       } catch {}
