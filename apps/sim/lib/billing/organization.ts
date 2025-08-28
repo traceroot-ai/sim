@@ -76,7 +76,7 @@ async function createOrganizationWithOwner(
 }
 
 /**
- * Create organization for team plan upgrade (called proactively during upgrade)
+ * Create organization for team/enterprise plan upgrade
  */
 export async function createOrganizationForTeamPlan(
   userId: string,
@@ -91,7 +91,7 @@ export async function createOrganizationForTeamPlan(
       return existingOrgId
     }
 
-    // Create new organization
+    // Create new organization (same naming for both team and enterprise)
     const organizationName = userName || `${userEmail || 'User'}'s Team`
     const slug = organizationSlug || `${userId}-team-${Date.now()}`
 
@@ -100,12 +100,15 @@ export async function createOrganizationForTeamPlan(
       originalUserId: userId,
     })
 
-    // Note: Organization activation must be handled by the client-side
-    // after this function returns the organizationId
+    logger.info('Created organization for team/enterprise plan', {
+      userId,
+      organizationId: orgId,
+      organizationName,
+    })
 
     return orgId
   } catch (error) {
-    logger.error('Failed to create organization for team plan', {
+    logger.error('Failed to create organization for team/enterprise plan', {
       userId,
       error,
     })

@@ -1354,10 +1354,12 @@ export const auth = betterAuth({
                   )
                 )
 
-              const teamSubscription = subscriptions.find((sub) => sub.plan === 'team')
+              const teamOrEnterpriseSubscription = subscriptions.find(
+                (sub) => sub.plan === 'team' || sub.plan === 'enterprise'
+              )
 
-              if (!teamSubscription) {
-                throw new Error('No active team subscription for this organization')
+              if (!teamOrEnterpriseSubscription) {
+                throw new Error('No active team or enterprise subscription for this organization')
               }
 
               const members = await db
@@ -1376,7 +1378,7 @@ export const auth = betterAuth({
                 )
 
               const totalCount = members.length + pendingInvites.length
-              const seatLimit = teamSubscription.seats || 1
+              const seatLimit = teamOrEnterpriseSubscription.seats || 1
 
               if (totalCount >= seatLimit) {
                 throw new Error(`Organization has reached its seat limit of ${seatLimit}`)

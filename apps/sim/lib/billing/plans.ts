@@ -36,7 +36,14 @@ export function getPlans(): BillingPlan[] {
       name: 'team',
       priceId: env.STRIPE_TEAM_PRICE_ID || '',
       limits: {
-        cost: getTeamTierLimitPerSeat(), // Per seat
+        cost: getTeamTierLimitPerSeat(),
+      },
+    },
+    {
+      name: 'enterprise',
+      priceId: 'price_dynamic',
+      limits: {
+        cost: getTeamTierLimitPerSeat(),
       },
     },
   ]
