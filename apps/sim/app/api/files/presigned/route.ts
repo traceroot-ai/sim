@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { getSession } from '@/lib/auth'
 import { createLogger } from '@/lib/logs/console/logger'
 import { getStorageProvider, isUsingCloudStorage } from '@/lib/uploads'
+import { isImageFileType } from '@/lib/uploads/file-utils'
 // Dynamic imports for storage clients to avoid client-side bundling
 import {
   BLOB_CHAT_CONFIG,
@@ -111,6 +112,12 @@ export async function POST(request: NextRequest) {
     if (uploadType === 'copilot') {
       if (!sessionUserId?.trim()) {
         throw new ValidationError('Authenticated user session is required for copilot uploads')
+      }
+      // Only allow image uploads for copilot
+      if (!isImageFileType(contentType)) {
+        throw new ValidationError(
+          'Only image files (JPEG, PNG, GIF, WebP, SVG) are allowed for copilot uploads'
+        )
       }
     }
 
@@ -232,10 +239,9 @@ async function handleS3PresignedUrl(
       )
     }
 
-    // For chat images, use direct S3 URLs since they need to be permanently accessible
-    // For other files, use serve path for access control
+    // For chat images and knowledge base files, use direct URLs since they need to be accessible by external services
     const finalPath =
-      uploadType === 'chat'
+      uploadType === 'chat' || uploadType === 'knowledge-base'
         ? `https://${config.bucket}.s3.${config.region}.amazonaws.com/${uniqueKey}`
         : `/api/files/serve/s3/${encodeURIComponent(uniqueKey)}`
 

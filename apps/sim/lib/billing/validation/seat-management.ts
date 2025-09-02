@@ -66,26 +66,9 @@ export async function validateSeatAvailability(
     const currentSeats = memberCount[0]?.count || 0
 
     // Determine seat limits based on subscription
-    let maxSeats = subscription.seats || 1
-
-    // For enterprise plans, check metadata for custom seat allowances
-    if (subscription.plan === 'enterprise' && subscription.metadata) {
-      try {
-        const metadata =
-          typeof subscription.metadata === 'string'
-            ? JSON.parse(subscription.metadata)
-            : subscription.metadata
-        if (metadata.maxSeats) {
-          maxSeats = metadata.maxSeats
-        }
-      } catch (error) {
-        logger.warn('Failed to parse enterprise subscription metadata', {
-          organizationId,
-          metadata: subscription.metadata,
-          error,
-        })
-      }
-    }
+    // Team: seats from Stripe subscription quantity
+    // Enterprise: seats from metadata (stored in subscription.seats)
+    const maxSeats = subscription.seats || 1
 
     const availableSeats = Math.max(0, maxSeats - currentSeats)
     const canInvite = availableSeats >= additionalSeats
@@ -161,24 +144,11 @@ export async function getOrganizationSeatInfo(
     const currentSeats = memberCount[0]?.count || 0
 
     // Determine seat limits
-    let maxSeats = subscription.seats || 1
-    let canAddSeats = true
+    const maxSeats = subscription.seats || 1
 
-    if (subscription.plan === 'enterprise' && subscription.metadata) {
-      try {
-        const metadata =
-          typeof subscription.metadata === 'string'
-            ? JSON.parse(subscription.metadata)
-            : subscription.metadata
-        if (metadata.maxSeats) {
-          maxSeats = metadata.maxSeats
-        }
-        // Enterprise plans might have fixed seat counts
-        canAddSeats = !metadata.fixedSeats
-      } catch (error) {
-        logger.warn('Failed to parse enterprise subscription metadata', { organizationId, error })
-      }
-    }
+    // Enterprise plans have fixed seats (can't self-serve changes)
+    // Team plans can add seats through Stripe
+    const canAddSeats = subscription.plan !== 'enterprise'
 
     const availableSeats = Math.max(0, maxSeats - currentSeats)
 

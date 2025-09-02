@@ -45,6 +45,7 @@ interface SubBlockProps {
   disabled?: boolean
   fieldDiffStatus?: FieldDiffStatus
   allowExpandInPreview?: boolean
+  isWide?: boolean
 }
 
 export function SubBlock({
@@ -56,6 +57,7 @@ export function SubBlock({
   disabled = false,
   fieldDiffStatus,
   allowExpandInPreview,
+  isWide = false,
 }: SubBlockProps) {
   const [isValidJson, setIsValidJson] = useState(true)
 
@@ -148,6 +150,7 @@ export function SubBlock({
               disabled={isDisabled}
               isConnecting={isConnecting}
               config={config}
+              isWide={isWide}
             />
           </div>
         )
@@ -483,10 +486,15 @@ export function SubBlock({
               </TooltipContent>
             </Tooltip>
           )}
-          {config.id === 'responseFormat' && !isValidJson && (
+          {config.id === 'responseFormat' && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <AlertTriangle className='h-4 w-4 cursor-pointer text-destructive' />
+                <AlertTriangle
+                  className={cn(
+                    'h-4 w-4 cursor-pointer text-destructive',
+                    !isValidJson ? 'opacity-100' : 'opacity-0'
+                  )}
+                />
               </TooltipTrigger>
               <TooltipContent side='top'>
                 <p>Invalid JSON</p>
