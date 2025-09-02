@@ -3,7 +3,7 @@
  *
  * This module provides standardized console logging utilities for internal application logging.
  * It is separate from the user-facing logging system in logging.ts.
- * 
+ *
  * For Node.js runtime, uses TraceRoot logger for enhanced logging with trace correlation.
  * For Edge runtime, falls back to console logging to avoid import errors.
  */
@@ -12,10 +12,12 @@ import { env } from '@/lib/env'
 
 // Runtime detection - check if we're in Edge runtime
 const isEdgeRuntime = () => {
-  return typeof window !== 'undefined' || 
-         (typeof globalThis !== 'undefined' && 'EdgeRuntime' in globalThis) ||
-         typeof process === 'undefined' ||
-         (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'edge')
+  return (
+    typeof window !== 'undefined' ||
+    (typeof globalThis !== 'undefined' && 'EdgeRuntime' in globalThis) ||
+    typeof process === 'undefined' ||
+    (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'edge')
+  )
 }
 
 // Conditional TraceRoot import - only in Node runtime
@@ -143,13 +145,15 @@ export class Logger {
    */
   constructor(module: string) {
     this.module = module
-    
+
     // Initialize TraceRoot logger instance if available
     if (traceRootLogger) {
       try {
         this.traceRootLoggerInstance = traceRootLogger(module)
       } catch (error) {
-        console.warn(`Failed to create TraceRoot logger for module ${module}, falling back to console logging`)
+        console.warn(
+          `Failed to create TraceRoot logger for module ${module}, falling back to console logging`
+        )
       }
     }
   }
