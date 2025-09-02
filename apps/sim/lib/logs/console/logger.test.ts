@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
-// Unmock the logger for this test file
 vi.unmock('@/lib/logs/console/logger')
 
 import { createLogger, Logger } from '@/lib/logs/console/logger'
