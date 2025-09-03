@@ -8,7 +8,7 @@ const config: TraceRootConfigFile = {
   github_commit_hash: 'staging',
 
   // Your environment configuration such as development, staging, production
-  environment: 'development',
+  environment: process.env.NODE_ENV || 'development',
 
   // Token configuration
   // This is the token you can generate from the TraceRoot.AI website
