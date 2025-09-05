@@ -34,7 +34,7 @@ async function fetchWorkflowsFromDB(workspaceId?: string): Promise<void> {
   try {
     useWorkflowRegistry.getState().setLoading(true)
 
-    const url = new URL(API_ENDPOINTS.SYNC, window.location.origin)
+    const url = new URL(API_ENDPOINTS.WORKFLOWS, window.location.origin)
 
     if (workspaceId) {
       url.searchParams.append('workspaceId', workspaceId)
@@ -123,27 +123,6 @@ async function fetchWorkflowsFromDB(workspaceId?: string): Promise<void> {
           needsRedeployment: false,
         }
       }
-
-      // Initialize subblock values
-      const subblockValues: Record<string, Record<string, any>> = {}
-      if (state?.blocks) {
-        Object.entries(state.blocks).forEach(([blockId, block]) => {
-          const blockState = block as BlockState
-          subblockValues[blockId] = {}
-
-          Object.entries(blockState.subBlocks || {}).forEach(([subblockId, subblock]) => {
-            subblockValues[blockId][subblockId] = subblock.value
-          })
-        })
-      }
-
-      // Update subblock store
-      useSubBlockStore.setState((state) => ({
-        workflowValues: {
-          ...state.workflowValues,
-          [id]: subblockValues,
-        },
-      }))
 
       if (variables && typeof variables === 'object') {
         useVariablesStore.setState((state) => {
@@ -505,23 +484,6 @@ export const useWorkflowRegistry = create<WorkflowRegistry>()(
               future: [],
             },
           }
-
-          // Extract and update subblock values
-          const subblockValues: Record<string, Record<string, any>> = {}
-          Object.entries(workflowState.blocks).forEach(([blockId, block]) => {
-            const blockState = block as any
-            subblockValues[blockId] = {}
-            Object.entries(blockState.subBlocks || {}).forEach(([subblockId, subblock]) => {
-              subblockValues[blockId][subblockId] = (subblock as any).value
-            })
-          })
-
-          useSubBlockStore.setState((state) => ({
-            workflowValues: {
-              ...state.workflowValues,
-              [id]: subblockValues,
-            },
-          }))
         } else {
           // If no state in DB, use empty state - server should have created start block
           workflowState = {
@@ -571,10 +533,11 @@ export const useWorkflowRegistry = create<WorkflowRegistry>()(
           }))
         }
 
+        // Update all stores atomically to prevent race conditions
+        // Set activeWorkflowId and workflow state together
+        set({ activeWorkflowId: id, error: null })
         useWorkflowStore.setState(workflowState)
         useSubBlockStore.getState().initializeFromWorkflow(id, (workflowState as any).blocks || {})
-
-        set({ activeWorkflowId: id, error: null })
 
         window.dispatchEvent(
           new CustomEvent('active-workflow-changed', {
@@ -940,7 +903,7 @@ export const useWorkflowRegistry = create<WorkflowRegistry>()(
               },
             }
 
-            const response = await fetch('/api/workflows/sync', {
+            const response = await fetch('/api/workflows', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

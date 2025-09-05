@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
       conversationId,
       contexts,
     } = ChatMessageSchema.parse(body)
+    // Ensure we have a consistent user message ID for this request
+    const userMessageIdToUse = userMessageId || crypto.randomUUID()
     try {
       logger.info(`[${tracker.requestId}] Received chat POST`, {
         hasContexts: Array.isArray(contexts),
@@ -369,12 +371,14 @@ export async function POST(req: NextRequest) {
       stream: stream,
       streamToolCalls: true,
       mode: mode,
+      messageId: userMessageIdToUse,
       ...(providerConfig ? { provider: providerConfig } : {}),
       ...(effectiveConversationId ? { conversationId: effectiveConversationId } : {}),
       ...(typeof effectiveDepth === 'number' ? { depth: effectiveDepth } : {}),
       ...(typeof effectivePrefetch === 'boolean' ? { prefetch: effectivePrefetch } : {}),
       ...(session?.user?.name && { userName: session.user.name }),
       ...(agentContexts.length > 0 && { context: agentContexts }),
+      ...(actualChatId ? { chatId: actualChatId } : {}),
     }
 
     try {
@@ -414,7 +418,7 @@ export async function POST(req: NextRequest) {
     if (stream && simAgentResponse.body) {
       // Create user message to save
       const userMessage = {
-        id: userMessageId || crypto.randomUUID(), // Use frontend ID if provided
+        id: userMessageIdToUse, // Consistent ID used for request and persistence
         role: 'user',
         content: message,
         timestamp: new Date().toISOString(),
@@ -810,7 +814,7 @@ export async function POST(req: NextRequest) {
     // Save messages if we have a chat
     if (currentChat && responseData.content) {
       const userMessage = {
-        id: userMessageId || crypto.randomUUID(), // Use frontend ID if provided
+        id: userMessageIdToUse, // Consistent ID used for request and persistence
         role: 'user',
         content: message,
         timestamp: new Date().toISOString(),
