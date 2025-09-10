@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
 import { checkServerSideUsageLimits } from '@/lib/billing'
+import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { getPersonalAndWorkspaceEnv } from '@/lib/environment/utils'
 import { createLogger } from '@/lib/logs/console/logger'
 import { LoggingSession } from '@/lib/logs/execution/logging-session'
@@ -14,18 +15,16 @@ import {
   getScheduleTimeValues,
   getSubBlockValue,
 } from '@/lib/schedules/utils'
-import { decryptSecret } from '@/lib/utils'
+import { decryptSecret, generateRequestId } from '@/lib/utils'
 import { loadWorkflowFromNormalizedTables } from '@/lib/workflows/db-helpers'
 import { updateWorkflowRunCounts } from '@/lib/workflows/utils'
 import { db } from '@/db'
-import { subscription, userStats, workflow, workflowSchedule } from '@/db/schema'
+import { userStats, workflow, workflowSchedule } from '@/db/schema'
 import { Executor } from '@/executor'
 import { Serializer } from '@/serializer'
 import { RateLimiter } from '@/services/queue'
-import type { SubscriptionPlan } from '@/services/queue/types'
 import { mergeSubblockState } from '@/stores/workflows/server-utils'
 
-// Add dynamic export to prevent caching
 export const dynamic = 'force-dynamic'
 
 const logger = createLogger('ScheduledExecuteAPI')
@@ -66,7 +65,7 @@ const runningExecutions = new Set<string>()
 
 export async function GET() {
   logger.info(`Scheduled execution triggered at ${new Date().toISOString()}`)
-  const requestId = crypto.randomUUID().slice(0, 8)
+  const requestId = generateRequestId()
   const now = new Date()
 
   let dueSchedules: (typeof workflowSchedule.$inferSelect)[] = []
@@ -108,19 +107,13 @@ export async function GET() {
           continue
         }
 
-        // Check rate limits for scheduled execution
-        const [subscriptionRecord] = await db
-          .select({ plan: subscription.plan })
-          .from(subscription)
-          .where(eq(subscription.referenceId, workflowRecord.userId))
-          .limit(1)
-
-        const subscriptionPlan = (subscriptionRecord?.plan || 'free') as SubscriptionPlan
+        // Check rate limits for scheduled execution (checks both personal and org subscriptions)
+        const userSubscription = await getHighestPrioritySubscription(workflowRecord.userId)
 
         const rateLimiter = new RateLimiter()
-        const rateLimitCheck = await rateLimiter.checkRateLimit(
+        const rateLimitCheck = await rateLimiter.checkRateLimitWithSubscription(
           workflowRecord.userId,
-          subscriptionPlan,
+          userSubscription,
           'schedule',
           false // schedules are always sync
         )
