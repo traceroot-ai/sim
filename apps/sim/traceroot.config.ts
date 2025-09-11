@@ -23,7 +23,7 @@ const config: TraceRootConfigFile = {
   enable_log_cloud_export: false,
 
   // Log level
-  log_level: 'debug',
+  log_level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
 
   // Local mode that whether to store all TraceRoot data locally
   // and allow traceroot platform serving locally
