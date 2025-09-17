@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { checkServerSideUsageLimits } from '@/lib/billing'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
 import { env, isTruthy } from '@/lib/env'
+import { IdempotencyService, webhookIdempotency } from '@/lib/idempotency/service'
 import { createLogger } from '@/lib/logs/console/logger'
 import { generateRequestId } from '@/lib/utils'
 import {
@@ -200,6 +201,37 @@ export async function POST(
     }
   }
 
+  // Handle Google Forms shared-secret authentication (Apps Script forwarder)
+  if (foundWebhook.provider === 'google_forms') {
+    const providerConfig = (foundWebhook.providerConfig as Record<string, any>) || {}
+    const expectedToken = providerConfig.token as string | undefined
+    const secretHeaderName = providerConfig.secretHeaderName as string | undefined
+
+    if (expectedToken) {
+      let isTokenValid = false
+
+      if (secretHeaderName) {
+        const headerValue = request.headers.get(secretHeaderName.toLowerCase())
+        if (headerValue === expectedToken) {
+          isTokenValid = true
+        }
+      } else {
+        const authHeader = request.headers.get('authorization')
+        if (authHeader?.toLowerCase().startsWith('bearer ')) {
+          const token = authHeader.substring(7)
+          if (token === expectedToken) {
+            isTokenValid = true
+          }
+        }
+      }
+
+      if (!isTokenValid) {
+        logger.warn(`[${requestId}] Google Forms webhook authentication failed for path: ${path}`)
+        return new NextResponse('Unauthorized - Invalid secret', { status: 401 })
+      }
+    }
+  }
+
   // Handle generic webhook authentication if enabled
   if (foundWebhook.provider === 'generic') {
     const providerConfig = (foundWebhook.providerConfig as Record<string, any>) || {}
@@ -328,7 +360,7 @@ export async function POST(
     // Continue processing - better to risk usage limit bypass than fail webhook
   }
 
-  // --- PHASE 5: Queue webhook execution (trigger.dev or direct based on env) ---
+  // --- PHASE 5: Idempotent webhook execution ---
   try {
     const payload = {
       webhookId: foundWebhook.id,
@@ -341,22 +373,44 @@ export async function POST(
       blockId: foundWebhook.blockId,
     }
 
-    const useTrigger = isTruthy(env.TRIGGER_DEV_ENABLED)
+    const idempotencyKey = IdempotencyService.createWebhookIdempotencyKey(
+      foundWebhook.id,
+      body,
+      Object.fromEntries(request.headers.entries())
+    )
 
-    if (useTrigger) {
-      const handle = await tasks.trigger('webhook-execution', payload)
-      logger.info(
-        `[${requestId}] Queued webhook execution task ${handle.id} for ${foundWebhook.provider} webhook`
-      )
-    } else {
-      // Fire-and-forget direct execution to avoid blocking webhook response
-      void executeWebhookJob(payload).catch((error) => {
-        logger.error(`[${requestId}] Direct webhook execution failed`, error)
-      })
-      logger.info(
-        `[${requestId}] Queued direct webhook execution for ${foundWebhook.provider} webhook (Trigger.dev disabled)`
-      )
-    }
+    const result = await webhookIdempotency.executeWithIdempotency(
+      foundWebhook.provider,
+      idempotencyKey,
+      async () => {
+        const useTrigger = isTruthy(env.TRIGGER_DEV_ENABLED)
+
+        if (useTrigger) {
+          const handle = await tasks.trigger('webhook-execution', payload)
+          logger.info(
+            `[${requestId}] Queued webhook execution task ${handle.id} for ${foundWebhook.provider} webhook`
+          )
+          return {
+            method: 'trigger.dev',
+            taskId: handle.id,
+            status: 'queued',
+          }
+        }
+        // Fire-and-forget direct execution to avoid blocking webhook response
+        void executeWebhookJob(payload).catch((error) => {
+          logger.error(`[${requestId}] Direct webhook execution failed`, error)
+        })
+        logger.info(
+          `[${requestId}] Queued direct webhook execution for ${foundWebhook.provider} webhook (Trigger.dev disabled)`
+        )
+        return {
+          method: 'direct',
+          status: 'queued',
+        }
+      }
+    )
+
+    logger.debug(`[${requestId}] Webhook execution result:`, result)
 
     // Return immediate acknowledgment with provider-specific format
     if (foundWebhook.provider === 'microsoftteams') {
