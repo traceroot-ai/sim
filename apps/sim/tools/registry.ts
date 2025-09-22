@@ -145,9 +145,13 @@ import { redditGetCommentsTool, redditGetPostsTool, redditHotPostsTool } from '@
 import { s3GetObjectTool } from '@/tools/s3'
 import { searchTool as serperSearch } from '@/tools/serper'
 import {
+  sharepointAddListItemTool,
+  sharepointCreateListTool,
   sharepointCreatePageTool,
+  sharepointGetListTool,
   sharepointListSitesTool,
   sharepointReadPageTool,
+  sharepointUpdateListItemTool,
 } from '@/tools/sharepoint'
 import { slackCanvasTool, slackMessageReaderTool, slackMessageTool } from '@/tools/slack'
 import { smsSendTool } from '@/tools/sms'
@@ -364,6 +368,10 @@ export const tools: Record<string, ToolConfig> = {
   sharepoint_create_page: sharepointCreatePageTool,
   sharepoint_read_page: sharepointReadPageTool,
   sharepoint_list_sites: sharepointListSitesTool,
+  sharepoint_get_list: sharepointGetListTool,
+  sharepoint_create_list: sharepointCreateListTool,
+  sharepoint_update_list: sharepointUpdateListItemTool,
+  sharepoint_add_list_items: sharepointAddListItemTool,
   // Provider chat tools
   // Provider chat tools - handled separately in agent blocks
 }

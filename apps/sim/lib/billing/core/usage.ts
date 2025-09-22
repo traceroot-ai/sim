@@ -1,3 +1,5 @@
+import { db } from '@sim/db'
+import { member, organization, settings, user, userStats } from '@sim/db/schema'
 import { eq, inArray } from 'drizzle-orm'
 import { getEmailSubject, renderUsageThresholdEmail } from '@/components/emails/render-email'
 import { getHighestPrioritySubscription } from '@/lib/billing/core/subscription'
@@ -11,8 +13,6 @@ import { sendEmail } from '@/lib/email/mailer'
 import { getEmailPreferences } from '@/lib/email/unsubscribe'
 import { isBillingEnabled } from '@/lib/environment'
 import { createLogger } from '@/lib/logs/console/logger'
-import { db } from '@/db'
-import { member, organization, settings, user, userStats } from '@/db/schema'
 
 const logger = createLogger('UsageManagement')
 
@@ -312,13 +312,15 @@ export async function getUserUsageLimit(userId: string): Promise<number> {
       .limit(1)
 
     if (userStatsQuery.length === 0) {
-      throw new Error(`User stats not found for userId: ${userId}`)
+      throw new Error(
+        `No user stats record found for userId: ${userId}. User must be properly initialized before execution.`
+      )
     }
 
     // Individual limits should never be null for free/pro users
     if (!userStatsQuery[0].currentUsageLimit) {
       throw new Error(
-        `Invalid null usage limit for ${subscription?.plan || 'free'} user: ${userId}`
+        `Invalid null usage limit for ${subscription?.plan || 'free'} user: ${userId}. User stats must be properly initialized.`
       )
     }
 
@@ -332,7 +334,7 @@ export async function getUserUsageLimit(userId: string): Promise<number> {
     .limit(1)
 
   if (orgData.length === 0) {
-    throw new Error(`Organization not found: ${subscription.referenceId}`)
+    throw new Error(`Organization not found: ${subscription.referenceId} for user: ${userId}`)
   }
 
   if (orgData[0].orgUsageLimit) {

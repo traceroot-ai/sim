@@ -1,3 +1,5 @@
+import { db } from '@sim/db'
+import { webhook, workflow } from '@sim/db/schema'
 import { tasks } from '@trigger.dev/sdk'
 import { and, eq } from 'drizzle-orm'
 import { type NextRequest, NextResponse } from 'next/server'
@@ -13,8 +15,6 @@ import {
   validateMicrosoftTeamsSignature,
 } from '@/lib/webhooks/utils'
 import { executeWebhookJob } from '@/background/webhook-execution'
-import { db } from '@/db'
-import { webhook, workflow } from '@/db/schema'
 import { RateLimiter } from '@/services/queue'
 
 const logger = createLogger('WebhookTriggerAPI')
@@ -375,39 +375,40 @@ export async function POST(
 
     const idempotencyKey = IdempotencyService.createWebhookIdempotencyKey(
       foundWebhook.id,
-      body,
       Object.fromEntries(request.headers.entries())
     )
+
+    const runOperation = async () => {
+      const useTrigger = isTruthy(env.TRIGGER_DEV_ENABLED)
+
+      if (useTrigger) {
+        const handle = await tasks.trigger('webhook-execution', payload)
+        logger.info(
+          `[${requestId}] Queued webhook execution task ${handle.id} for ${foundWebhook.provider} webhook`
+        )
+        return {
+          method: 'trigger.dev',
+          taskId: handle.id,
+          status: 'queued',
+        }
+      }
+      // Fire-and-forget direct execution to avoid blocking webhook response
+      void executeWebhookJob(payload).catch((error) => {
+        logger.error(`[${requestId}] Direct webhook execution failed`, error)
+      })
+      logger.info(
+        `[${requestId}] Queued direct webhook execution for ${foundWebhook.provider} webhook (Trigger.dev disabled)`
+      )
+      return {
+        method: 'direct',
+        status: 'queued',
+      }
+    }
 
     const result = await webhookIdempotency.executeWithIdempotency(
       foundWebhook.provider,
       idempotencyKey,
-      async () => {
-        const useTrigger = isTruthy(env.TRIGGER_DEV_ENABLED)
-
-        if (useTrigger) {
-          const handle = await tasks.trigger('webhook-execution', payload)
-          logger.info(
-            `[${requestId}] Queued webhook execution task ${handle.id} for ${foundWebhook.provider} webhook`
-          )
-          return {
-            method: 'trigger.dev',
-            taskId: handle.id,
-            status: 'queued',
-          }
-        }
-        // Fire-and-forget direct execution to avoid blocking webhook response
-        void executeWebhookJob(payload).catch((error) => {
-          logger.error(`[${requestId}] Direct webhook execution failed`, error)
-        })
-        logger.info(
-          `[${requestId}] Queued direct webhook execution for ${foundWebhook.provider} webhook (Trigger.dev disabled)`
-        )
-        return {
-          method: 'direct',
-          status: 'queued',
-        }
-      }
+      runOperation
     )
 
     logger.debug(`[${requestId}] Webhook execution result:`, result)
