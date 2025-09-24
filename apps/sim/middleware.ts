@@ -1,11 +1,11 @@
 import { getSessionCookie } from 'better-auth/cookies'
 import { type NextRequest, NextResponse } from 'next/server'
 import { isDev, isHosted } from './lib/environment'
-import { createLogger } from './lib/logs/console/logger'
+import { createEdgeLogger } from './lib/logs/console/edge-logger'
 import { generateRuntimeCSP } from './lib/security/csp'
 import { getBaseDomain } from './lib/urls/utils'
 
-const logger = createLogger('Middleware')
+const logger = createEdgeLogger('Middleware')
 
 const SUSPICIOUS_UA_PATTERNS = [
   /^\s*$/, // Empty user agents

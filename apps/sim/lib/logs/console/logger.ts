@@ -1,142 +1,48 @@
 /**
  * logger.ts
  *
- * This module provides standardized console logging utilities for internal application logging.
- * It is separate from the user-facing logging system in logging.ts.
+ * Enhanced logger that extends EdgeLogger with Node.js-specific features.
+ * Adds TraceRoot integration and colorization for server-side logging.
  *
- * For Node.js runtime, uses TraceRoot logger for enhanced logging with trace correlation.
- * For Edge runtime, falls back to console logging to avoid import errors.
+ * For Edge Runtime (middleware), use edge-logger.ts directly to avoid bundle size issues.
+ * For other code that might run in browser/SSR, this logger will gracefully degrade.
  */
-import chalk from 'chalk'
-import { env } from '@/lib/env'
+import { EdgeLogger } from './edge-logger'
+import { formatArgs, getLogConfig, LogLevel } from './utils'
 
-// Runtime detection - check if we're in Edge runtime
-const isEdgeRuntime = () => {
-  return (
-    typeof window !== 'undefined' ||
-    (typeof globalThis !== 'undefined' && 'EdgeRuntime' in globalThis) ||
-    typeof process === 'undefined' ||
-    (typeof process !== 'undefined' && process.env.NEXT_RUNTIME === 'edge')
-  )
-}
-
-// Conditional TraceRoot import - only in Node runtime
+// Conditional imports that are safe to fail
+let chalk: any = null
 let traceRootLogger: any = null
 
-if (!isEdgeRuntime()) {
-  try {
+try {
+  // Only import chalk in Node.js environments
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
+    chalk = require('chalk')
+  }
+} catch {
+  // Chalk not available or in browser, will use plain console logging
+}
+
+try {
+  // Only import TraceRoot in Node.js environments
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
     const traceRoot = require('traceroot-sdk-ts')
     traceRootLogger = traceRoot.getLogger
-  } catch (importError) {
-    console.warn('TraceRoot SDK not available, falling back to console logging')
   }
+} catch {
+  // TraceRoot SDK not available, will fall back to console logging
 }
+
+// Re-export LogLevel for backward compatibility
+export { LogLevel }
 
 /**
- * LogLevel enum defines the severity levels for logging
+ * Enhanced logger class that extends EdgeLogger with Node.js-specific features
  *
- * DEBUG: Detailed information, typically useful only for diagnosing problems
- *        These logs are only shown in development environment
- *
- * INFO: Confirmation that things are working as expected
- *       These logs are shown in both development and production environments
- *
- * WARN: Indication that something unexpected happened, or may happen in the near future
- *       The application can still continue working as expected
- *
- * ERROR: Error events that might still allow the application to continue running
- *        These should be investigated and fixed
+ * This class adds colorization and TraceRoot integration while maintaining
+ * compatibility with Edge Runtime and browser environments.
  */
-export enum LogLevel {
-  DEBUG = 'DEBUG',
-  INFO = 'INFO',
-  WARN = 'WARN',
-  ERROR = 'ERROR',
-}
-
-/**
- * Get the minimum log level from environment variable or use defaults
- * - Development: DEBUG (show all logs)
- * - Production: ERROR (only show errors, but can be overridden by LOG_LEVEL env var)
- * - Test: ERROR (only show errors in tests)
- */
-const getMinLogLevel = (): LogLevel => {
-  if (env.LOG_LEVEL) {
-    return env.LOG_LEVEL as LogLevel
-  }
-
-  const ENV = (env.NODE_ENV || 'development') as string
-  switch (ENV) {
-    case 'development':
-      return LogLevel.DEBUG
-    case 'production':
-      return LogLevel.ERROR
-    case 'test':
-      return LogLevel.ERROR
-    default:
-      return LogLevel.DEBUG
-  }
-}
-
-/**
- * Configuration for different environments
- *
- * enabled: Whether logging is enabled at all
- * minLevel: The minimum log level that will be displayed
- *          (e.g., INFO will show INFO, WARN, and ERROR, but not DEBUG)
- * colorize: Whether to apply color formatting to logs
- */
-const LOG_CONFIG = {
-  development: {
-    enabled: true,
-    minLevel: getMinLogLevel(),
-    colorize: true,
-  },
-  production: {
-    enabled: true, // Will be checked at runtime
-    minLevel: getMinLogLevel(),
-    colorize: false,
-  },
-  test: {
-    enabled: false, // Disable logs in test environment
-    minLevel: getMinLogLevel(),
-    colorize: false,
-  },
-}
-
-// Get current environment
-const ENV = (env.NODE_ENV || 'development') as keyof typeof LOG_CONFIG
-const config = LOG_CONFIG[ENV] || LOG_CONFIG.development
-
-// Format objects for logging
-const formatObject = (obj: any): string => {
-  try {
-    if (obj instanceof Error) {
-      return JSON.stringify(
-        {
-          message: obj.message,
-          stack: ENV === 'development' ? obj.stack : undefined,
-          ...(obj as any),
-        },
-        null,
-        ENV === 'development' ? 2 : 0
-      )
-    }
-    return JSON.stringify(obj, null, ENV === 'development' ? 2 : 0)
-  } catch (_error) {
-    return '[Circular or Non-Serializable Object]'
-  }
-}
-
-/**
- * Logger class for standardized console logging
- *
- * This class provides methods for logging at different severity levels
- * and handles formatting, colorization, and environment-specific behavior.
- * Uses TraceRoot logger in Node runtime and falls back to console logging in Edge runtime.
- */
-export class Logger {
-  private module: string
+export class Logger extends EdgeLogger {
   private traceRootLoggerInstance: any = null
 
   /**
@@ -144,9 +50,9 @@ export class Logger {
    * @param module The name of the module (e.g., 'OpenAIProvider', 'AgentBlockHandler')
    */
   constructor(module: string) {
-    this.module = module
+    super(module)
 
-    // Initialize TraceRoot logger instance if available
+    // Initialize TraceRoot logger instance if available (Node.js only)
     if (traceRootLogger) {
       try {
         this.traceRootLoggerInstance = traceRootLogger(module)
@@ -159,92 +65,71 @@ export class Logger {
   }
 
   /**
-   * Determines if a log at the given level should be displayed
-   * based on the current environment configuration
-   *
-   * @param level The log level to check
-   * @returns boolean indicating whether the log should be displayed
-   */
-  private shouldLog(level: LogLevel): boolean {
-    if (!config.enabled) return false
-
-    // In production, only log on server-side (where window is undefined)
-    if (ENV === 'production' && typeof window !== 'undefined') {
-      return false
-    }
-
-    const levels = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR]
-    const minLevelIndex = levels.indexOf(config.minLevel)
-    const currentLevelIndex = levels.indexOf(level)
-
-    return currentLevelIndex >= minLevelIndex
-  }
-
-  /**
-   * Format arguments for logging, converting objects to JSON strings
-   *
-   * @param args Arguments to format
-   * @returns Formatted arguments
-   */
-  private formatArgs(args: any[]): any[] {
-    return args.map((arg) => {
-      if (arg === null || arg === undefined) return arg
-      if (typeof arg === 'object') return formatObject(arg)
-      return arg
-    })
-  }
-
-  /**
-   * Internal method to log a message with the specified level
+   * Enhanced logging method with TraceRoot integration and colorization
+   * Overrides the base EdgeLogger method to add Node.js-specific features
    *
    * @param level The severity level of the log
    * @param message The main log message
    * @param args Additional arguments to log
    */
-  private log(level: LogLevel, message: string, ...args: any[]) {
-    if (!this.shouldLog(level)) return
-
-    const timestamp = new Date().toISOString()
-    const formattedArgs = this.formatArgs(args)
-
-    // Color configuration
-    if (config.colorize) {
-      let levelColor
-      const moduleColor = chalk.cyan
-      const timestampColor = chalk.gray
-
+  protected log(level: LogLevel, message: string, ...args: any[]) {
+    // Use TraceRoot if available (Node.js only)
+    if (this.traceRootLoggerInstance) {
       switch (level) {
         case LogLevel.DEBUG:
-          levelColor = chalk.blue
-          break
+          this.traceRootLoggerInstance.debug(message, ...args)
+          return
         case LogLevel.INFO:
-          levelColor = chalk.green
-          break
+          this.traceRootLoggerInstance.info(message, ...args)
+          return
         case LogLevel.WARN:
-          levelColor = chalk.yellow
-          break
+          this.traceRootLoggerInstance.warn(message, ...args)
+          return
         case LogLevel.ERROR:
-          levelColor = chalk.red
-          break
-      }
-
-      const coloredPrefix = `${timestampColor(`[${timestamp}]`)} ${levelColor(`[${level}]`)} ${moduleColor(`[${this.module}]`)}`
-
-      if (level === LogLevel.ERROR) {
-        console.error(coloredPrefix, message, ...formattedArgs)
-      } else {
-        console.log(coloredPrefix, message, ...formattedArgs)
-      }
-    } else {
-      // No colors in production
-      const prefix = `[${timestamp}] [${level}] [${this.module}]`
-
-      if (level === LogLevel.ERROR) {
-        console.error(prefix, message, ...formattedArgs)
-      } else {
-        console.log(prefix, message, ...formattedArgs)
+          this.traceRootLoggerInstance.error(message, ...args)
+          return
       }
     }
+
+    // Enhanced console logging with colors (if chalk available)
+    if (chalk) {
+      const timestamp = new Date().toISOString()
+      const formattedArgs = formatArgs(args)
+      const config = getLogConfig()
+
+      if (config.colorize) {
+        let levelColor
+        const moduleColor = chalk.cyan
+        const timestampColor = chalk.gray
+
+        switch (level) {
+          case LogLevel.DEBUG:
+            levelColor = chalk.blue
+            break
+          case LogLevel.INFO:
+            levelColor = chalk.green
+            break
+          case LogLevel.WARN:
+            levelColor = chalk.yellow
+            break
+          case LogLevel.ERROR:
+            levelColor = chalk.red
+            break
+        }
+
+        const coloredPrefix = `${timestampColor(`[${timestamp}]`)} ${levelColor(`[${level}]`)} ${moduleColor(`[${this.module}]`)}`
+
+        if (level === LogLevel.ERROR) {
+          console.error(coloredPrefix, message, ...formattedArgs)
+        } else {
+          console.log(coloredPrefix, message, ...formattedArgs)
+        }
+        return
+      }
+    }
+
+    // Fallback to base EdgeLogger behavior (no colors, safe for all environments)
+    super.log(level, message, ...args)
   }
 
   /**

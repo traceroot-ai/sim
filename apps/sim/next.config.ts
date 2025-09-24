@@ -1,3 +1,4 @@
+import withBundleAnalyzer from '@next/bundle-analyzer'
 import { withSentryConfig } from '@sentry/nextjs'
 import type { NextConfig } from 'next'
 import { env, isTruthy } from './lib/env'
@@ -227,4 +228,10 @@ const sentryConfig = {
   },
 }
 
-export default isDev ? nextConfig : withSentryConfig(nextConfig, sentryConfig)
+const bundleAnalyzer = withBundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+})
+
+export default isDev
+  ? bundleAnalyzer(nextConfig)
+  : withSentryConfig(bundleAnalyzer(nextConfig), sentryConfig)
