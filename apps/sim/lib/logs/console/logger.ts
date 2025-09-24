@@ -1,14 +1,14 @@
 /**
  * logger.ts
  *
- * Enhanced logger that extends EdgeLogger with Node.js-specific features.
- * Adds TraceRoot integration and colorization for server-side logging.
+ * Enhanced logger that extends BaseLogger with Node.js-specific features.
+ * Adds TraceRoot integration for server-side logging.
  *
- * For Edge Runtime (middleware), use edge-logger.ts directly to avoid bundle size issues.
+ * For Edge Runtime (middleware), use base-logger.ts directly to avoid bundle size issues.
  * For other code that might run in browser/SSR, this logger will gracefully degrade.
  */
-import { EdgeLogger } from './edge-logger'
-import { formatArgs, getLogConfig, LogLevel } from './utils'
+import { BaseLogger } from './base-logger'
+import { LogLevel } from './utils'
 
 // Conditional imports that are safe to fail
 let chalk: any = null
@@ -37,12 +37,12 @@ try {
 export { LogLevel }
 
 /**
- * Enhanced logger class that extends EdgeLogger with Node.js-specific features
+ * Enhanced logger class that extends BaseLogger with Node.js-specific features
  *
- * This class adds colorization and TraceRoot integration while maintaining
+ * This class adds TraceRoot integration while maintaining
  * compatibility with Edge Runtime and browser environments.
  */
-export class Logger extends EdgeLogger {
+export class Logger extends BaseLogger {
   private traceRootLoggerInstance: any = null
 
   /**
@@ -65,8 +65,8 @@ export class Logger extends EdgeLogger {
   }
 
   /**
-   * Enhanced logging method with TraceRoot integration and colorization
-   * Overrides the base EdgeLogger method to add Node.js-specific features
+   * Enhanced logging method with TraceRoot integration
+   * Overrides the base BaseLogger method to add Node.js-specific features
    *
    * @param level The severity level of the log
    * @param message The main log message
@@ -91,44 +91,7 @@ export class Logger extends EdgeLogger {
       }
     }
 
-    // Enhanced console logging with colors (if chalk available)
-    if (chalk) {
-      const timestamp = new Date().toISOString()
-      const formattedArgs = formatArgs(args)
-      const config = getLogConfig()
-
-      if (config.colorize) {
-        let levelColor
-        const moduleColor = chalk.cyan
-        const timestampColor = chalk.gray
-
-        switch (level) {
-          case LogLevel.DEBUG:
-            levelColor = chalk.blue
-            break
-          case LogLevel.INFO:
-            levelColor = chalk.green
-            break
-          case LogLevel.WARN:
-            levelColor = chalk.yellow
-            break
-          case LogLevel.ERROR:
-            levelColor = chalk.red
-            break
-        }
-
-        const coloredPrefix = `${timestampColor(`[${timestamp}]`)} ${levelColor(`[${level}]`)} ${moduleColor(`[${this.module}]`)}`
-
-        if (level === LogLevel.ERROR) {
-          console.error(coloredPrefix, message, ...formattedArgs)
-        } else {
-          console.log(coloredPrefix, message, ...formattedArgs)
-        }
-        return
-      }
-    }
-
-    // Fallback to base EdgeLogger behavior (no colors, safe for all environments)
+    // Fallback to BaseLogger for console logging with colorization
     super.log(level, message, ...args)
   }
 
