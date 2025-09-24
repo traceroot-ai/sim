@@ -6,7 +6,17 @@
  * Includes conditional colorization based on environment configuration.
  */
 
-import chalk from 'chalk'
+import { formatArgs, getLogConfig, LogLevel, shouldLog } from './utils'
+
+// Conditional chalk import for Edge Runtime compatibility
+let chalk: any = null
+try {
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
+    chalk = require('chalk')
+  }
+} catch {
+  // Fallback to no colorization
+}
 import { formatArgs, getLogConfig, LogLevel, shouldLog } from './utils'
 
 /**
