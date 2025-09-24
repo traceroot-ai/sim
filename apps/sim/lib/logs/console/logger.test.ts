@@ -26,6 +26,19 @@ describe('Logger', () => {
     })
   })
 
+  describe('traceroot integration', () => {
+    test('should have traceRootLoggerInstance property', () => {
+      expect(logger).toHaveProperty('traceRootLoggerInstance')
+    })
+
+    test('traceRootLoggerInstance should be accessible', () => {
+      // Access the private property using bracket notation for testing
+      const traceRootInstance = (logger as any).traceRootLoggerInstance
+      // Should be either null (if TraceRoot not available) or an object (if available)
+      expect(traceRootInstance === null || typeof traceRootInstance === 'object').toBe(true)
+    })
+  })
+
   describe('logging methods', () => {
     test('should have debug method', () => {
       expect(typeof logger.debug).toBe('function')
