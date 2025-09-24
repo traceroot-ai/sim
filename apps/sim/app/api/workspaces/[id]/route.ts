@@ -8,79 +8,96 @@ const logger = createLogger('WorkspaceByIdAPI')
 
 import { db } from '@sim/db'
 import { knowledgeBase, permissions, templates, workspace } from '@sim/db/schema'
+import * as traceroot from 'traceroot-sdk-ts'
 import { getUserEntityPermissions } from '@/lib/permissions/utils'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const session = await getSession()
+  const getWorkspaceDetails = traceroot.traceFunction(
+    async function getWorkspaceDetails() {
+      const { id } = await params
+      const session = await getSession()
 
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const workspaceId = id
-  const url = new URL(request.url)
-  const checkTemplates = url.searchParams.get('check-templates') === 'true'
-
-  // Check if user has any access to this workspace
-  const userPermission = await getUserEntityPermissions(session.user.id, 'workspace', workspaceId)
-  if (!userPermission) {
-    return NextResponse.json({ error: 'Workspace not found or access denied' }, { status: 404 })
-  }
-
-  // If checking for published templates before deletion
-  if (checkTemplates) {
-    try {
-      // Get all workflows in this workspace
-      const workspaceWorkflows = await db
-        .select({ id: workflow.id })
-        .from(workflow)
-        .where(eq(workflow.workspaceId, workspaceId))
-
-      if (workspaceWorkflows.length === 0) {
-        return NextResponse.json({ hasPublishedTemplates: false, publishedTemplates: [] })
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      const workflowIds = workspaceWorkflows.map((w) => w.id)
+      const workspaceId = id
+      const url = new URL(request.url)
 
-      // Check for published templates that reference these workflows
-      const publishedTemplates = await db
-        .select({
-          id: templates.id,
-          name: templates.name,
-          workflowId: templates.workflowId,
-        })
-        .from(templates)
-        .where(inArray(templates.workflowId, workflowIds))
+      logger.info(url.toString(), { workspaceId })
+      const checkTemplates = url.searchParams.get('check-templates') === 'true'
+
+      // Check if user has any access to this workspace
+      const userPermission = await getUserEntityPermissions(
+        session.user.id,
+        'workspace',
+        workspaceId
+      )
+      if (!userPermission) {
+        return NextResponse.json({ error: 'Workspace not found or access denied' }, { status: 404 })
+      }
+
+      // If checking for published templates before deletion
+      if (checkTemplates) {
+        try {
+          // Get all workflows in this workspace
+          const workspaceWorkflows = await db
+            .select({ id: workflow.id })
+            .from(workflow)
+            .where(eq(workflow.workspaceId, workspaceId))
+
+          if (workspaceWorkflows.length === 0) {
+            return NextResponse.json({ hasPublishedTemplates: false, publishedTemplates: [] })
+          }
+
+          const workflowIds = workspaceWorkflows.map((w) => w.id)
+
+          // Check for published templates that reference these workflows
+          const publishedTemplates = await db
+            .select({
+              id: templates.id,
+              name: templates.name,
+              workflowId: templates.workflowId,
+            })
+            .from(templates)
+            .where(inArray(templates.workflowId, workflowIds))
+
+          return NextResponse.json({
+            hasPublishedTemplates: publishedTemplates.length > 0,
+            publishedTemplates,
+            count: publishedTemplates.length,
+          })
+        } catch (error) {
+          logger.error(`Error checking published templates for workspace ${workspaceId}:`, error)
+          return NextResponse.json(
+            { error: 'Failed to check published templates' },
+            { status: 500 }
+          )
+        }
+      }
+
+      // Get workspace details
+      const workspaceDetails = await db
+        .select()
+        .from(workspace)
+        .where(eq(workspace.id, workspaceId))
+        .then((rows) => rows[0])
+
+      if (!workspaceDetails) {
+        return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
+      }
 
       return NextResponse.json({
-        hasPublishedTemplates: publishedTemplates.length > 0,
-        publishedTemplates,
-        count: publishedTemplates.length,
+        workspace: {
+          ...workspaceDetails,
+          permissions: userPermission,
+        },
       })
-    } catch (error) {
-      logger.error(`Error checking published templates for workspace ${workspaceId}:`, error)
-      return NextResponse.json({ error: 'Failed to check published templates' }, { status: 500 })
-    }
-  }
-
-  // Get workspace details
-  const workspaceDetails = await db
-    .select()
-    .from(workspace)
-    .where(eq(workspace.id, workspaceId))
-    .then((rows) => rows[0])
-
-  if (!workspaceDetails) {
-    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
-  }
-
-  return NextResponse.json({
-    workspace: {
-      ...workspaceDetails,
-      permissions: userPermission,
     },
-  })
+    { spanName: 'getWorkspaceDetails', traceParams: true }
+  )
+
+  return await getWorkspaceDetails()
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
