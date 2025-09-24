@@ -57,7 +57,7 @@ async function initializeOpenTelemetry() {
       url: telemetryConfig.endpoint,
     })
 
-    const spanProcessor = new BatchSpanProcessor(exporter, {
+    const spanProcessor = new BatchSpanProcessor(exporter as any, {
       maxQueueSize:
         telemetryConfig.batchSettings?.maxQueueSize ||
         DEFAULT_TELEMETRY_CONFIG.batchSettings.maxQueueSize,
@@ -80,7 +80,7 @@ async function initializeOpenTelemetry() {
 
     const sdk = new NodeSDK({
       resource: configResource,
-      spanProcessors: [spanProcessor],
+      spanProcessors: [spanProcessor as any],
     })
 
     sdk.start()
