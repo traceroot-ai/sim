@@ -12,7 +12,7 @@ const config: TraceRootConfigFile = {
 
   // Token configuration
   // This is the token you can generate from the TraceRoot.AI website
-  token: 'traceroot-*',
+  token: process.env.TRACEROOT_TOKEN || 'traceroot-*',
 
   // Whether to enable console export of spans and logs
   enable_span_console_export: false,

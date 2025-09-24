@@ -110,11 +110,7 @@ export class Logger extends BaseLogger {
    * @param args Additional arguments to log
    */
   debug(message: string, ...args: any[]) {
-    if (this.traceRootLoggerInstance) {
-      this.traceRootLoggerInstance.debug(message, ...args)
-    } else {
-      this.log(LogLevel.DEBUG, message, ...args)
-    }
+    this.log(LogLevel.DEBUG, message, ...args)
   }
 
   /**
@@ -132,11 +128,7 @@ export class Logger extends BaseLogger {
    * @param args Additional arguments to log
    */
   info(message: string, ...args: any[]) {
-    if (this.traceRootLoggerInstance) {
-      this.traceRootLoggerInstance.info(message, ...args)
-    } else {
-      this.log(LogLevel.INFO, message, ...args)
-    }
+    this.log(LogLevel.INFO, message, ...args)
   }
 
   /**
@@ -153,11 +145,7 @@ export class Logger extends BaseLogger {
    * @param args Additional arguments to log
    */
   warn(message: string, ...args: any[]) {
-    if (this.traceRootLoggerInstance) {
-      this.traceRootLoggerInstance.warn(message, ...args)
-    } else {
-      this.log(LogLevel.WARN, message, ...args)
-    }
+    this.log(LogLevel.WARN, message, ...args)
   }
 
   /**
@@ -174,11 +162,7 @@ export class Logger extends BaseLogger {
    * @param args Additional arguments to log
    */
   error(message: string, ...args: any[]) {
-    if (this.traceRootLoggerInstance) {
-      this.traceRootLoggerInstance.error(message, ...args)
-    } else {
-      this.log(LogLevel.ERROR, message, ...args)
-    }
+    this.log(LogLevel.ERROR, message, ...args)
   }
 }
 
